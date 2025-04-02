@@ -1,9 +1,20 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import MainLayout from "@/components/layout/MainLayout";
 import Index from "./pages/Index";
+import AboutPage from "./pages/about/AboutPage";
+import LoginPage from "./pages/auth/LoginPage";
+import RegisterPage from "./pages/auth/RegisterPage";
+import JobsPage from "./pages/jobs/JobsPage";
+import JobDetailsPage from "./pages/jobs/JobDetailsPage";
+import RecruiterDashboardPage from "./pages/dashboard/RecruiterDashboardPage";
+import StudentDashboardPage from "./pages/dashboard/StudentDashboardPage";
+import ApplicationReviewPage from "./pages/applications/ApplicationReviewPage";
+import StudentApplicationPage from "./pages/applications/StudentApplicationPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -15,9 +26,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Index />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/jobs/:id" element={<JobDetailsPage />} />
+            <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
+            <Route path="/recruiter/applications/:id" element={<ApplicationReviewPage />} />
+            <Route path="/student/dashboard" element={<StudentDashboardPage />} />
+            <Route path="/student/applications/:id" element={<StudentApplicationPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
