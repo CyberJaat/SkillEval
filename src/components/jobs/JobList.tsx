@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import JobCard, { JobListing } from "./JobCard";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,72 +9,83 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search } from "lucide-react";
-
-// Mock data
-const mockJobs: JobListing[] = [
-  {
-    id: "job1",
-    title: "Frontend Developer",
-    company: "TechCorp",
-    location: "Remote",
-    type: "Full-time",
-    posted: "2 days ago",
-    deadline: "in 30 days",
-    skills: ["React", "TypeScript", "Tailwind CSS"],
-    description: "We're looking for a skilled frontend developer to join our team and build responsive web applications using modern technologies.",
-  },
-  {
-    id: "job2",
-    title: "Backend Engineer",
-    company: "DataSystems",
-    location: "New York, NY",
-    type: "Full-time",
-    posted: "1 week ago",
-    deadline: "in 14 days",
-    skills: ["Node.js", "Express", "MongoDB", "AWS"],
-    description: "Join our backend team to develop scalable APIs and services that power our data-intensive applications.",
-  },
-  {
-    id: "job3",
-    title: "UI/UX Designer",
-    company: "CreativeStudio",
-    location: "San Francisco, CA",
-    type: "Contract",
-    posted: "3 days ago",
-    deadline: "in 21 days",
-    skills: ["Figma", "Adobe XD", "User Research", "Prototyping"],
-    description: "Help us create beautiful and intuitive user interfaces for our growing product suite.",
-  },
-  {
-    id: "job4",
-    title: "Data Scientist",
-    company: "AnalyticsPro",
-    location: "Hybrid",
-    type: "Part-time",
-    posted: "Just now",
-    deadline: "in 7 days",
-    skills: ["Python", "Machine Learning", "SQL", "Data Visualization"],
-    description: "We need a data scientist to help us extract insights from our large datasets and build predictive models.",
-  },
-  {
-    id: "job5",
-    title: "DevOps Engineer",
-    company: "CloudTech",
-    location: "Remote",
-    type: "Full-time",
-    posted: "5 days ago",
-    deadline: "in 10 days",
-    skills: ["Docker", "Kubernetes", "CI/CD", "Linux"],
-    description: "Join our DevOps team to build and maintain our cloud infrastructure and deployment pipelines.",
-  },
-];
+import { Search, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const JobList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [jobType, setJobType] = useState<string | undefined>(undefined);
+  const [jobs, setJobs] = useState<JobListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredJobs = mockJobs.filter((job) => {
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          const formattedJobs: JobListing[] = data.map(job => ({
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: "Remote", // Add location field to the jobs table if needed
+            type: job.task_type === "coding" ? "Full-time" : 
+                 job.task_type === "design" ? "Contract" :
+                 job.task_type === "writing" ? "Part-time" : "Internship",
+            posted: formatDate(job.created_at),
+            deadline: formatDeadline(job.deadline),
+            skills: job.requirements.slice(0, 4),
+            description: job.description
+          }));
+          setJobs(formattedJobs);
+        }
+      } catch (err: any) {
+        console.error("Error fetching jobs:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
+
+  const formatDeadline = (dateString: string) => {
+    const deadline = new Date(dateString);
+    const now = new Date();
+    const diffTime = deadline.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return "Expired";
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays < 7) return `in ${diffDays} days`;
+    if (diffDays < 30) return `in ${Math.floor(diffDays / 7)} weeks`;
+    return `in ${Math.floor(diffDays / 30)} months`;
+  };
+
+  const filteredJobs = jobs.filter((job) => {
     const matchesSearch =
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -85,6 +96,23 @@ const JobList = () => {
     
     return matchesSearch && matchesType;
   });
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-xl text-destructive">Error loading jobs</p>
+        <p className="text-sm text-muted-foreground mt-2">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -104,7 +132,6 @@ const JobList = () => {
               <SelectValue placeholder="Job Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Types</SelectItem>
               <SelectItem value="Full-time">Full-time</SelectItem>
               <SelectItem value="Part-time">Part-time</SelectItem>
               <SelectItem value="Contract">Contract</SelectItem>

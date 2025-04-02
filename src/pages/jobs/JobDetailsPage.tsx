@@ -1,9 +1,9 @@
 
-import React, { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPin, Clock, ChevronLeft, Briefcase } from "lucide-react";
+import { CalendarIcon, MapPin, Clock, ChevronLeft, Briefcase, Loader2 } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -14,63 +14,118 @@ import {
 } from "@/components/ui/dialog";
 import ScreenRecorder from "@/components/tasks/ScreenRecorder";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Database } from "@/integrations/supabase/types";
 
-// Mock job data
-const mockJob = {
-  id: "job1",
-  title: "Frontend Developer",
-  company: "TechCorp",
-  location: "Remote",
-  type: "Full-time",
-  posted: "October 15, 2023",
-  deadline: "November 15, 2023",
-  companyLogo: "",
-  skills: ["React", "TypeScript", "Tailwind CSS", "REST APIs"],
-  description: "We're looking for a skilled frontend developer to join our team and build responsive web applications using modern technologies.",
-  responsibilities: [
-    "Develop and maintain responsive web applications using React",
-    "Collaborate with designers to implement UI/UX designs",
-    "Work with backend engineers to integrate APIs",
-    "Write clean, maintainable, and efficient code",
-    "Perform code reviews and mentor junior developers"
-  ],
-  requirements: [
-    "2+ years of experience with React and modern JavaScript",
-    "Proficiency with CSS and responsive design",
-    "Experience with state management (Redux, Context API)",
-    "Knowledge of RESTful API integration",
-    "Bachelor's degree in Computer Science or related field (or equivalent experience)"
-  ],
-  task: {
-    id: "task1",
-    title: "Build a Simple Todo App",
-    description: "Create a basic todo application using React that allows users to add, delete, and mark tasks as complete.",
-    instructions: [
-      "Create a new React application",
-      "Implement a form to add new todo items",
-      "Display a list of todo items with options to mark as complete or delete",
-      "Implement basic styling using CSS or a CSS framework",
-      "Ensure the application is responsive and works on mobile devices",
-      "Add a filter to show all, active, or completed tasks"
-    ],
-    timeLimit: 60 // minutes
-  }
-};
+type Job = Database['public']['Tables']['jobs']['Row'];
 
 const JobDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const [isApplying, setIsApplying] = useState(false);
+  const [job, setJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
   
-  // In a real app, we would fetch job details based on id
-  const job = mockJob;
-  
-  const handleSubmitRecording = (videoBlob: Blob) => {
-    console.log("Submitting recording", videoBlob);
-    // This would typically be an API call to upload the video
-    setTimeout(() => {
-      toast.success("Your task submission has been received and is being processed");
+  useEffect(() => {
+    const fetchJob = async () => {
+      if (!id) return;
+      
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        setJob(data);
+      } catch (err: any) {
+        console.error("Error fetching job:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJob();
+  }, [id]);
+
+  const handleSubmitRecording = async (videoBlob: Blob) => {
+    if (!user || !job) {
+      toast.error("You must be logged in to apply");
+      return;
+    }
+
+    try {
+      // First, create a new application record
+      const { data: application, error: applicationError } = await supabase
+        .from("applications")
+        .insert({
+          job_id: job.id,
+          student_id: user.id,
+          status: "submitted",
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (applicationError) throw applicationError;
+
+      // Upload the recording to Supabase storage would go here
+      // For now, we'll just simulate success
+      
+      toast.success("Your application has been submitted successfully!");
       setIsApplying(false);
-    }, 1500);
+      
+      // Redirect to the student dashboard
+      navigate("/student/dashboard");
+    } catch (err: any) {
+      toast.error(err.message || "Error submitting application");
+      console.error("Error submitting application:", err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container py-8 flex justify-center items-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <div className="container py-8">
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold text-destructive">Error loading job details</h2>
+          <p className="text-muted-foreground mt-2">{error || "Job not found"}</p>
+          <Button asChild className="mt-4">
+            <Link to="/jobs">Back to Jobs</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const taskMock = {
+    id: "task1",
+    title: job.title,
+    description: job.task_instructions,
+    instructions: job.requirements,
+    timeLimit: 60 // minutes
   };
   
   return (
@@ -88,15 +143,7 @@ const JobDetailsPage = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                  {job.companyLogo ? (
-                    <img 
-                      src={job.companyLogo} 
-                      alt={`${job.company} logo`} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Briefcase className="w-8 h-8 text-muted-foreground" />
-                  )}
+                  <Briefcase className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold">{job.title}</h1>
@@ -105,18 +152,20 @@ const JobDetailsPage = () => {
                     <span className="mx-2">•</span>
                     <div className="flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5" />
-                      <span>{job.location}</span>
+                      <span>Remote</span>
                     </div>
                   </div>
                 </div>
               </div>
-              <Badge variant={job.type === "Full-time" ? "default" : "outline"} className="md:self-start">
-                {job.type}
+              <Badge variant={job.task_type === "coding" ? "default" : "outline"} className="md:self-start">
+                {job.task_type === "coding" ? "Full-time" : 
+                 job.task_type === "design" ? "Contract" :
+                 job.task_type === "writing" ? "Part-time" : "Internship"}
               </Badge>
             </div>
             
             <div className="flex flex-wrap gap-2 mb-6">
-              {job.skills.map((skill) => (
+              {job.requirements.slice(0, 6).map((skill) => (
                 <Badge key={skill} variant="secondary" className="font-normal">
                   {skill}
                 </Badge>
@@ -132,7 +181,7 @@ const JobDetailsPage = () => {
               <div>
                 <h2 className="text-xl font-semibold mb-3">Responsibilities</h2>
                 <ul className="list-disc pl-5 space-y-1 text-foreground/90">
-                  {job.responsibilities.map((item, index) => (
+                  {job.requirements.slice(0, 5).map((item, index) => (
                     <li key={index}>{item}</li>
                   ))}
                 </ul>
@@ -141,7 +190,7 @@ const JobDetailsPage = () => {
               <div>
                 <h2 className="text-xl font-semibold mb-3">Requirements</h2>
                 <ul className="list-disc pl-5 space-y-1 text-foreground/90">
-                  {job.requirements.map((item, index) => (
+                  {job.requirements.slice(5).map((item, index) => (
                     <li key={index}>{item}</li>
                   ))}
                 </ul>
@@ -160,7 +209,7 @@ const JobDetailsPage = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-sm">Posted on</h3>
-                  <p className="text-foreground/90">{job.posted}</p>
+                  <p className="text-foreground/90">{formatDate(job.created_at)}</p>
                 </div>
               </div>
               
@@ -170,7 +219,7 @@ const JobDetailsPage = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-sm">Application Deadline</h3>
-                  <p className="text-foreground/90">{job.deadline}</p>
+                  <p className="text-foreground/90">{formatDate(job.deadline)}</p>
                 </div>
               </div>
             </div>
@@ -182,7 +231,22 @@ const JobDetailsPage = () => {
               </p>
               <Dialog open={isApplying} onOpenChange={setIsApplying}>
                 <DialogTrigger asChild>
-                  <Button className="w-full">Apply for this Job</Button>
+                  <Button 
+                    className="w-full" 
+                    onClick={() => {
+                      if (!user) {
+                        toast.error("You must be logged in to apply");
+                        navigate("/login");
+                        return;
+                      }
+                      if (profile?.user_type !== "student") {
+                        toast.error("Only students can apply for jobs");
+                        return;
+                      }
+                    }}
+                  >
+                    Apply for this Job
+                  </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -191,7 +255,7 @@ const JobDetailsPage = () => {
                       Your screen will be recorded as you complete this task. This helps us evaluate your skills.
                     </DialogDescription>
                   </DialogHeader>
-                  <ScreenRecorder task={job.task} onSubmit={handleSubmitRecording} />
+                  <ScreenRecorder task={taskMock} onSubmit={handleSubmitRecording} />
                 </DialogContent>
               </Dialog>
             </div>

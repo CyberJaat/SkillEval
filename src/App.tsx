@@ -15,6 +15,7 @@ import RecruiterDashboardPage from "./pages/dashboard/RecruiterDashboardPage";
 import StudentDashboardPage from "./pages/dashboard/StudentDashboardPage";
 import ApplicationReviewPage from "./pages/applications/ApplicationReviewPage";
 import StudentApplicationPage from "./pages/applications/StudentApplicationPage";
+import CreateJobPage from "./pages/recruiter/CreateJobPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
 import RequireAuth from "./components/auth/RequireAuth";
@@ -39,6 +40,11 @@ const App = () => (
               <Route path="/recruiter/dashboard" element={
                 <RequireAuth userType="recruiter">
                   <RecruiterDashboardPage />
+                </RequireAuth>
+              } />
+              <Route path="/recruiter/jobs/new" element={
+                <RequireAuth userType="recruiter">
+                  <CreateJobPage />
                 </RequireAuth>
               } />
               <Route path="/recruiter/applications/:id" element={

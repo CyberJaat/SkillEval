@@ -85,7 +85,7 @@ const Navbar = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>
-                    {profile ? `${profile.first_name} ${profile.last_name}` : user.email}
+                    {profile ? `${profile.first_name || ''} ${profile.last_name || ''}` : user.email}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate(profile?.user_type === "recruiter" ? "/recruiter/dashboard" : "/student/dashboard")}>

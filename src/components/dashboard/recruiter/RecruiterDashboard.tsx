@@ -1,18 +1,95 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Briefcase, Users, Clock } from "lucide-react";
+import { PlusCircle, Briefcase, Users, Clock, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import JobListingTable from "./JobListingTable";
 import ApplicantsTable from "./ApplicantsTable";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const RecruiterDashboard = () => {
-  // In a real application, this would come from an API
-  const activeJobCount = 5;
-  const applicantsCount = 12;
-  const pendingReviewsCount = 8;
+  const { user } = useAuth();
+  const [activeJobCount, setActiveJobCount] = useState(0);
+  const [applicantsCount, setApplicantsCount] = useState(0);
+  const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        
+        // Fetch active jobs count
+        const { count: jobCount, error: jobError } = await supabase
+          .from("jobs")
+          .select("*", { count: "exact" })
+          .eq("recruiter_id", user.id)
+          .eq("is_active", true);
+
+        if (jobError) throw jobError;
+        
+        if (jobCount !== null) {
+          setActiveJobCount(jobCount);
+        }
+
+        // Fetch all applications for recruiter's jobs
+        const { data: recruitersJobs, error: jobsError } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("recruiter_id", user.id);
+
+        if (jobsError) throw jobsError;
+        
+        if (recruitersJobs && recruitersJobs.length > 0) {
+          const jobIds = recruitersJobs.map(job => job.id);
+          
+          // Get total applicants count
+          const { count: appCount, error: appError } = await supabase
+            .from("applications")
+            .select("*", { count: "exact" })
+            .in("job_id", jobIds);
+
+          if (appError) throw appError;
+          
+          if (appCount !== null) {
+            setApplicantsCount(appCount);
+          }
+          
+          // Get pending reviews count
+          const { count: pendingCount, error: pendingError } = await supabase
+            .from("applications")
+            .select("*", { count: "exact" })
+            .in("job_id", jobIds)
+            .eq("status", "submitted");
+
+          if (pendingError) throw pendingError;
+          
+          if (pendingCount !== null) {
+            setPendingReviewsCount(pendingCount);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
