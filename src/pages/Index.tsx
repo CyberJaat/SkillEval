@@ -1,8 +1,7 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, CloudCog, Shield, UserRound } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, CloudCog, Shield, UserRound, CheckCircle2 } from "lucide-react";
 
 const Index = () => {
   return (

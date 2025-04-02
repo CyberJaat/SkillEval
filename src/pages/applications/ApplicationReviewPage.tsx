@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -40,7 +39,7 @@ const mockApplication = {
       },
       overall_recommendation: "Based on the code quality and task completion, John would be a strong candidate for the Frontend Developer position. His understanding of React fundamentals is solid, and he demonstrates good problem-solving skills."
     },
-    taskType: "coding"
+    taskType: "coding" as const
   }
 };
 

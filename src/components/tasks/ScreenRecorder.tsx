@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Video, Pause, Play, Stop, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Video, Pause, Play, Square, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface TaskDetails {
   id: string;
@@ -42,7 +41,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
 
   useEffect(() => {
     return () => {
-      // Clean up when component unmounts
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -53,7 +51,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
   }, [stream]);
 
   useEffect(() => {
-    // Set up anti-tab-switching detection
     const handleVisibilityChange = () => {
       if (document.hidden && status === "recording" && !warningShown) {
         toast.warning("Tab switching detected! Your recording may be invalidated.");
@@ -70,22 +67,18 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
   const startRecording = async () => {
     setStatus("preparing");
     try {
-      // Request screen capture
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: { 
-          cursor: "always",
           displaySurface: "monitor",
         },
         audio: true,
       });
 
-      // Optional: Also capture microphone audio
       const audioStream = await navigator.mediaDevices.getUserMedia({ 
         audio: true,
         video: false,
       });
 
-      // Combine the streams
       const combinedStream = new MediaStream([
         ...displayStream.getVideoTracks(),
         ...audioStream.getAudioTracks(),
@@ -93,17 +86,14 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
 
       setStream(combinedStream);
 
-      // Display preview
       if (videoRef.current) {
         videoRef.current.srcObject = combinedStream;
       }
 
-      // Create media recorder
       const recorder = new MediaRecorder(combinedStream, {
         mimeType: "video/webm;codecs=vp9,opus",
       });
 
-      // Set up event listeners
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           setRecordedChunks((prev) => [...prev, event.data]);
@@ -112,11 +102,9 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
 
       setMediaRecorder(recorder);
       
-      // Start recording after setup
-      recorder.start(1000); // Collect data every second
+      recorder.start(1000);
       setStatus("recording");
       
-      // Start timer
       timerRef.current = window.setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
@@ -211,7 +199,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
               <Pause className="mr-2 h-4 w-4" /> Pause
             </Button>
             <Button variant="destructive" onClick={stopRecording}>
-              <Stop className="mr-2 h-4 w-4" /> Stop Recording
+              <Square className="mr-2 h-4 w-4" /> Stop Recording
             </Button>
           </div>
         );
@@ -222,7 +210,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
               <Play className="mr-2 h-4 w-4" /> Resume
             </Button>
             <Button variant="destructive" onClick={stopRecording}>
-              <Stop className="mr-2 h-4 w-4" /> Stop Recording
+              <Square className="mr-2 h-4 w-4" /> Stop Recording
             </Button>
           </div>
         );
