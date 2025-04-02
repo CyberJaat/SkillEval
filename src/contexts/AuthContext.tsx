@@ -4,6 +4,9 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Database } from "@/integrations/supabase/types";
+
+type ProfileType = Database['public']['Tables']['profiles']['Row'];
 
 interface UserProfile {
   id: string;
@@ -71,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from("profiles")
+        .from('profiles')
         .select("*")
         .eq("id", userId)
         .single();

@@ -10,6 +10,15 @@ import AIReviewPanel from "@/components/ai/AIReviewPanel";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
+
+type ApplicationWithRelations = Database['public']['Tables']['applications']['Row'] & {
+  job: Database['public']['Tables']['jobs']['Row'];
+  student: Database['public']['Tables']['profiles']['Row'];
+};
+
+type AIReview = Database['public']['Tables']['ai_reviews']['Row'];
+type RecruiterFeedback = Database['public']['Tables']['recruiter_feedback']['Row'];
 
 const ApplicationReviewPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,9 +28,9 @@ const ApplicationReviewPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [application, setApplication] = useState<any>(null);
-  const [aiReview, setAiReview] = useState<any>(null);
-  const [existingFeedback, setExistingFeedback] = useState<any>(null);
+  const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
+  const [aiReview, setAiReview] = useState<AIReview | null>(null);
+  const [existingFeedback, setExistingFeedback] = useState<RecruiterFeedback | null>(null);
   
   useEffect(() => {
     if (!id || !user) return;
@@ -30,7 +39,7 @@ const ApplicationReviewPage = () => {
       try {
         // Fetch application data
         const { data: applicationData, error: applicationError } = await supabase
-          .from("applications")
+          .from('applications')
           .select(`
             *,
             job:jobs(*),
@@ -44,7 +53,7 @@ const ApplicationReviewPage = () => {
         
         // Fetch AI review
         const { data: reviewData, error: reviewError } = await supabase
-          .from("ai_reviews")
+          .from('ai_reviews')
           .select("*")
           .eq("application_id", id)
           .single();
@@ -55,12 +64,12 @@ const ApplicationReviewPage = () => {
         
         // Fetch existing feedback
         const { data: feedbackData, error: feedbackError } = await supabase
-          .from("recruiter_feedback")
+          .from('recruiter_feedback')
           .select("*")
           .eq("application_id", id)
           .single();
           
-        if (!feedbackError) {
+        if (!feedbackError && feedbackData) {
           setExistingFeedback(feedbackData);
           setRecruiterNotes(feedbackData.feedback);
         }
@@ -83,15 +92,18 @@ const ApplicationReviewPage = () => {
       if (existingFeedback) {
         // Update existing feedback
         const { error } = await supabase
-          .from("recruiter_feedback")
-          .update({ feedback: recruiterNotes, updated_at: new Date().toISOString() })
+          .from('recruiter_feedback')
+          .update({ 
+            feedback: recruiterNotes, 
+            updated_at: new Date().toISOString() 
+          })
           .eq("id", existingFeedback.id);
           
         if (error) throw error;
       } else {
         // Create new feedback
         const { error } = await supabase
-          .from("recruiter_feedback")
+          .from('recruiter_feedback')
           .insert({
             application_id: id,
             feedback: recruiterNotes
@@ -101,7 +113,7 @@ const ApplicationReviewPage = () => {
         
         // Update local state
         const { data } = await supabase
-          .from("recruiter_feedback")
+          .from('recruiter_feedback')
           .select("*")
           .eq("application_id", id)
           .single();
@@ -110,7 +122,7 @@ const ApplicationReviewPage = () => {
       }
       
       toast.success("Notes saved successfully");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving notes:", error);
       toast.error("Failed to save notes");
     } finally {
@@ -130,7 +142,7 @@ const ApplicationReviewPage = () => {
       
       // Update application status to a more appropriate one
       const { error } = await supabase
-        .from("applications")
+        .from('applications')
         .update({ 
           status: "completed", 
           updated_at: new Date().toISOString() 
@@ -140,7 +152,7 @@ const ApplicationReviewPage = () => {
       if (error) throw error;
       
       toast.success("Feedback sent to the applicant");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending feedback:", error);
       toast.error("Failed to send feedback");
     } finally {
@@ -224,7 +236,7 @@ const ApplicationReviewPage = () => {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-4">
-                    Submitted on {new Date(application.completed_at).toLocaleDateString()}
+                    Submitted on {application.completed_at ? new Date(application.completed_at).toLocaleDateString() : 'Not completed yet'}
                   </p>
                 </CardContent>
               </Card>
