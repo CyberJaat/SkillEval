@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 
 const jobFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -83,7 +82,10 @@ const CreateJobForm = () => {
           is_active: true,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error details:", error);
+        throw error;
+      }
 
       toast.success("Job posted successfully!");
       navigate("/recruiter/dashboard");

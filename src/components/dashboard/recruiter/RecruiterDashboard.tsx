@@ -9,6 +9,7 @@ import JobListingTable from "./JobListingTable";
 import ApplicantsTable from "./ApplicantsTable";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const RecruiterDashboard = () => {
   const { user } = useAuth();
@@ -73,8 +74,9 @@ const RecruiterDashboard = () => {
             setPendingReviewsCount(pendingCount);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
+        toast.error("Error loading dashboard data");
       } finally {
         setLoading(false);
       }

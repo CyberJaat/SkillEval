@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Table, 
   TableBody, 
@@ -11,57 +11,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ExternalLink, PlayCircle } from "lucide-react";
+import { ExternalLink, PlayCircle, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
-// Mock data
-const applicants = [
-  {
-    id: "app1",
-    name: "John Smith",
-    job: "Frontend Developer",
-    submitted: "2023-10-18",
-    status: "completed",
-    score: 4.5,
-    avatar: "",
-  },
-  {
-    id: "app2",
-    name: "Emily Johnson",
-    job: "Frontend Developer",
-    submitted: "2023-10-17",
-    status: "reviewing",
-    score: null,
-    avatar: "",
-  },
-  {
-    id: "app3",
-    name: "Michael Brown",
-    job: "Backend Engineer",
-    submitted: "2023-10-16",
-    status: "completed",
-    score: 3.8,
-    avatar: "",
-  },
-  {
-    id: "app4",
-    name: "Sophia Williams",
-    job: "UI/UX Designer",
-    submitted: "2023-10-15",
-    status: "reviewing",
-    score: null,
-    avatar: "",
-  },
-  {
-    id: "app5",
-    name: "James Davis",
-    job: "Backend Engineer",
-    submitted: "2023-10-14",
-    status: "completed",
-    score: 4.2,
-    avatar: "",
-  },
-];
+interface Applicant {
+  id: string;
+  name: string;
+  job: string;
+  jobId: string;
+  submitted: string;
+  status: string;
+  score: number | null;
+  avatar: string;
+}
 
 const getInitials = (name: string) => {
   return name
@@ -74,14 +39,145 @@ const getStatusColor = (status: string) => {
   switch (status) {
     case "completed":
       return "default";
-    case "reviewing":
+    case "submitted":
       return "secondary";
+    case "reviewing":
+      return "warning";
     default:
       return "outline";
   }
 };
 
 const ApplicantsTable = () => {
+  const { user } = useAuth();
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchApplicants = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        
+        // First get all job IDs for this recruiter
+        const { data: jobs, error: jobsError } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("recruiter_id", user.id);
+
+        if (jobsError) throw jobsError;
+        
+        if (!jobs || jobs.length === 0) {
+          setApplicants([]);
+          return;
+        }
+
+        const jobIds = jobs.map(job => job.id);
+        
+        // Fetch applications for these jobs with job and student details
+        const { data: applications, error: applicationsError } = await supabase
+          .from("applications")
+          .select(`
+            id, 
+            status, 
+            created_at,
+            job_id,
+            jobs(title),
+            student_id
+          `)
+          .in("job_id", jobIds)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (applicationsError) throw applicationsError;
+        
+        if (!applications || applications.length === 0) {
+          setApplicants([]);
+          return;
+        }
+
+        // Get student profiles for each application
+        const applicantsData = await Promise.all(
+          applications.map(async (application) => {
+            const { data: profile, error: profileError } = await supabase
+              .from("profiles")
+              .select("first_name, last_name, avatar_url")
+              .eq("id", application.student_id)
+              .single();
+
+            if (profileError) {
+              console.error("Error fetching profile:", profileError);
+              return {
+                id: application.id,
+                name: "Unknown Student",
+                job: application.jobs?.title || "Unknown Job",
+                jobId: application.job_id,
+                submitted: formatDate(application.created_at),
+                status: application.status,
+                score: null,
+                avatar: "",
+              };
+            }
+
+            // Check if there's an AI review
+            let score = null;
+            const { data: aiReview } = await supabase
+              .from("ai_reviews")
+              .select("score")
+              .eq("application_id", application.id)
+              .maybeSingle();
+
+            if (aiReview) {
+              score = aiReview.score;
+            }
+
+            return {
+              id: application.id,
+              name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || "Unknown Student",
+              job: application.jobs?.title || "Unknown Job",
+              jobId: application.job_id,
+              submitted: formatDate(application.created_at),
+              status: application.status,
+              score,
+              avatar: profile.avatar_url || "",
+            };
+          })
+        );
+
+        setApplicants(applicantsData);
+      } catch (error: any) {
+        console.error("Error fetching applicants:", error);
+        toast.error("Failed to load applicants data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchApplicants();
+  }, [user]);
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Unknown";
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (applicants.length === 0) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        No applicants found. Your jobs will appear here once candidates apply.
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md glass-panel">
       <Table>
@@ -125,7 +221,7 @@ const ApplicantsTable = () => {
                 <Button asChild size="sm" variant="outline">
                   <Link to={`/recruiter/applications/${applicant.id}`}>
                     <PlayCircle className="mr-2 h-4 w-4" />
-                    View Recording
+                    View Application
                   </Link>
                 </Button>
               </TableCell>
