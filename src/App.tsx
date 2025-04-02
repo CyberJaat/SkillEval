@@ -16,6 +16,8 @@ import StudentDashboardPage from "./pages/dashboard/StudentDashboardPage";
 import ApplicationReviewPage from "./pages/applications/ApplicationReviewPage";
 import StudentApplicationPage from "./pages/applications/StudentApplicationPage";
 import NotFound from "./pages/NotFound";
+import { AuthProvider } from "./contexts/AuthContext";
+import RequireAuth from "./components/auth/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -25,21 +27,39 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route element={<MainLayout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/jobs/:id" element={<JobDetailsPage />} />
-            <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
-            <Route path="/recruiter/applications/:id" element={<ApplicationReviewPage />} />
-            <Route path="/student/dashboard" element={<StudentDashboardPage />} />
-            <Route path="/student/applications/:id" element={<StudentApplicationPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/jobs/:id" element={<JobDetailsPage />} />
+              <Route path="/recruiter/dashboard" element={
+                <RequireAuth userType="recruiter">
+                  <RecruiterDashboardPage />
+                </RequireAuth>
+              } />
+              <Route path="/recruiter/applications/:id" element={
+                <RequireAuth userType="recruiter">
+                  <ApplicationReviewPage />
+                </RequireAuth>
+              } />
+              <Route path="/student/dashboard" element={
+                <RequireAuth userType="student">
+                  <StudentDashboardPage />
+                </RequireAuth>
+              } />
+              <Route path="/student/applications/:id" element={
+                <RequireAuth userType="student">
+                  <StudentApplicationPage />
+                </RequireAuth>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

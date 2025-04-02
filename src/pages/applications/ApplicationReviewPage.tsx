@@ -1,74 +1,177 @@
-import React, { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, Save, Send } from "lucide-react";
+import { ChevronLeft, Save, Send, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AIReviewPanel from "@/components/ai/AIReviewPanel";
 import { toast } from "sonner";
-
-// Mock application data
-const mockApplication = {
-  id: "app1",
-  studentName: "John Smith",
-  jobTitle: "Frontend Developer",
-  company: "TechCorp",
-  appliedDate: "October 18, 2023",
-  status: "completed",
-  videoUrl: "https://example.com/recording.mp4", // This would be a real URL in production
-  aiReview: {
-    score: 4.2,
-    feedback: {
-      summary: "John demonstrated strong React skills with good understanding of state management and component lifecycle. The code was well-structured and followed best practices for the most part.",
-      strengths: [
-        "Clean and readable code structure",
-        "Effective use of React hooks",
-        "Good component organization",
-        "Responsive design implementation"
-      ],
-      areas_to_improve: [
-        "Could optimize performance with memoization",
-        "Some components could be further broken down",
-        "Add more comprehensive error handling"
-      ],
-      code_quality: {
-        correctness: 4.5,
-        efficiency: 3.8,
-        best_practices: 4.3
-      },
-      overall_recommendation: "Based on the code quality and task completion, John would be a strong candidate for the Frontend Developer position. His understanding of React fundamentals is solid, and he demonstrates good problem-solving skills."
-    },
-    taskType: "coding" as const
-  }
-};
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const ApplicationReviewPage = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [recruiterNotes, setRecruiterNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [application, setApplication] = useState<any>(null);
+  const [aiReview, setAiReview] = useState<any>(null);
+  const [existingFeedback, setExistingFeedback] = useState<any>(null);
   
-  // In a real app, we would fetch application details based on id
-  const application = mockApplication;
+  useEffect(() => {
+    if (!id || !user) return;
+    
+    const fetchApplicationData = async () => {
+      try {
+        // Fetch application data
+        const { data: applicationData, error: applicationError } = await supabase
+          .from("applications")
+          .select(`
+            *,
+            job:jobs(*),
+            student:profiles(*)
+          `)
+          .eq("id", id)
+          .single();
+          
+        if (applicationError) throw applicationError;
+        setApplication(applicationData);
+        
+        // Fetch AI review
+        const { data: reviewData, error: reviewError } = await supabase
+          .from("ai_reviews")
+          .select("*")
+          .eq("application_id", id)
+          .single();
+          
+        if (!reviewError) {
+          setAiReview(reviewData);
+        }
+        
+        // Fetch existing feedback
+        const { data: feedbackData, error: feedbackError } = await supabase
+          .from("recruiter_feedback")
+          .select("*")
+          .eq("application_id", id)
+          .single();
+          
+        if (!feedbackError) {
+          setExistingFeedback(feedbackData);
+          setRecruiterNotes(feedbackData.feedback);
+        }
+      } catch (error) {
+        console.error("Error fetching application data:", error);
+        toast.error("Failed to load application data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchApplicationData();
+  }, [id, user]);
   
-  const handleSaveNotes = () => {
+  const handleSaveNotes = async () => {
+    if (!id || !user) return;
+    
     setIsSaving(true);
-    // This would typically be an API call to save notes
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      if (existingFeedback) {
+        // Update existing feedback
+        const { error } = await supabase
+          .from("recruiter_feedback")
+          .update({ feedback: recruiterNotes, updated_at: new Date().toISOString() })
+          .eq("id", existingFeedback.id);
+          
+        if (error) throw error;
+      } else {
+        // Create new feedback
+        const { error } = await supabase
+          .from("recruiter_feedback")
+          .insert({
+            application_id: id,
+            feedback: recruiterNotes
+          });
+          
+        if (error) throw error;
+        
+        // Update local state
+        const { data } = await supabase
+          .from("recruiter_feedback")
+          .select("*")
+          .eq("application_id", id)
+          .single();
+          
+        setExistingFeedback(data);
+      }
+      
       toast.success("Notes saved successfully");
-    }, 1000);
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      toast.error("Failed to save notes");
+    } finally {
+      setIsSaving(false);
+    }
   };
   
-  const handleSendFeedback = () => {
+  const handleSendFeedback = async () => {
+    if (!id || !user) return;
+    
     setIsSending(true);
-    // This would typically be an API call to send feedback
-    setTimeout(() => {
-      setIsSending(false);
+    try {
+      // First save the feedback if not already saved
+      if (!existingFeedback || existingFeedback.feedback !== recruiterNotes) {
+        await handleSaveNotes();
+      }
+      
+      // Update application status to a more appropriate one
+      const { error } = await supabase
+        .from("applications")
+        .update({ 
+          status: "completed", 
+          updated_at: new Date().toISOString() 
+        })
+        .eq("id", id);
+        
+      if (error) throw error;
+      
       toast.success("Feedback sent to the applicant");
-    }, 1500);
+    } catch (error) {
+      console.error("Error sending feedback:", error);
+      toast.error("Failed to send feedback");
+    } finally {
+      setIsSending(false);
+    }
   };
+  
+  if (isLoading) {
+    return (
+      <div className="container py-8 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading application data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!application) {
+    return (
+      <div className="container py-8">
+        <div className="text-center glass-panel p-8 rounded-lg">
+          <h2 className="text-2xl font-bold mb-2">Application Not Found</h2>
+          <p className="text-muted-foreground mb-6">The application you're looking for doesn't exist or you don't have permission to view it.</p>
+          <Button onClick={() => navigate("/recruiter/dashboard")}>
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="container py-8">
@@ -81,9 +184,9 @@ const ApplicationReviewPage = () => {
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold">{application.studentName}</h1>
+          <h1 className="text-3xl font-bold">{application.student?.first_name} {application.student?.last_name}</h1>
           <p className="text-muted-foreground">
-            Application for {application.jobTitle} at {application.company}
+            Application for {application.job?.title} at {application.job?.company}
           </p>
         </div>
         <div className="flex gap-2">
@@ -108,23 +211,46 @@ const ApplicationReviewPage = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="aspect-video bg-black rounded-md overflow-hidden">
-                    {/* In a real app, this would be a video player component */}
-                    <div className="w-full h-full flex items-center justify-center text-white">
-                      <p>Video player would be integrated here</p>
-                    </div>
+                    {application.recording_url ? (
+                      <video 
+                        src={application.recording_url} 
+                        className="w-full h-full" 
+                        controls
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white">
+                        <p>No recording available</p>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-4">
-                    Submitted on {application.appliedDate}
+                    Submitted on {new Date(application.completed_at).toLocaleDateString()}
                   </p>
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="ai-review" className="p-0 mt-4">
-              <AIReviewPanel 
-                score={application.aiReview.score} 
-                feedback={application.aiReview.feedback} 
-                taskType={application.aiReview.taskType} 
-              />
+              {aiReview ? (
+                <AIReviewPanel 
+                  score={aiReview.score} 
+                  feedback={{
+                    summary: aiReview.summary,
+                    strengths: aiReview.strengths,
+                    areas_to_improve: aiReview.areas_to_improve,
+                    code_quality: aiReview.code_quality,
+                    overall_recommendation: aiReview.overall_recommendation
+                  }} 
+                  taskType={application.job?.task_type as "coding" | "design" | "presentation"}
+                />
+              ) : (
+                <Card className="glass-panel">
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No AI review available for this application yet.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -161,11 +287,11 @@ const ApplicationReviewPage = () => {
               </div>
               <div>
                 <h3 className="text-sm font-medium">Applied On</h3>
-                <p className="text-foreground/90">{application.appliedDate}</p>
+                <p className="text-foreground/90">{new Date(application.created_at).toLocaleDateString()}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium">AI Score</h3>
-                <p className="text-foreground/90">{application.aiReview.score.toFixed(1)}/5.0</p>
+                <p className="text-foreground/90">{aiReview ? `${aiReview.score.toFixed(1)}/5.0` : "Not available"}</p>
               </div>
             </CardContent>
           </Card>
