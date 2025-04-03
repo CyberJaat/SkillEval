@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -18,12 +18,34 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
   onPlayRecording,
   isPlayback = false
 }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+
   useEffect(() => {
     // If in playback mode and there's a recording URL, set it as the source
     if (isPlayback && recordingUrl && videoRef.current) {
       videoRef.current.src = recordingUrl;
     }
   }, [isPlayback, recordingUrl, videoRef]);
+
+  useEffect(() => {
+    // Add event listeners to track video play state
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+
+    videoElement.addEventListener('play', handlePlay);
+    videoElement.addEventListener('pause', handlePause);
+    videoElement.addEventListener('ended', handleEnded);
+
+    return () => {
+      videoElement.removeEventListener('play', handlePlay);
+      videoElement.removeEventListener('pause', handlePause);
+      videoElement.removeEventListener('ended', handleEnded);
+    };
+  }, [videoRef]);
 
   return (
     <div className="aspect-video bg-black/20 rounded-md overflow-hidden relative">
@@ -40,7 +62,7 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
             className="w-full h-full" 
             controls={isPlayback}
           />
-          {!videoRef.current?.playing && (
+          {!isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <Button 
                 variant="outline" 
