@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, Briefcase, Users, Clock, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import JobListingTable from "./JobListingTable";
-import ApplicantsTable from "./ApplicantsTable";
+import CustomApplicantsTable from "./CustomApplicantsTable";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -152,7 +152,7 @@ const RecruiterDashboard = () => {
           <JobListingTable />
         </TabsContent>
         <TabsContent value="applicants">
-          <ApplicantsTable />
+          <CustomApplicantsTable />
         </TabsContent>
       </Tabs>
     </div>

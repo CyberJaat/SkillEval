@@ -1,6 +1,5 @@
 
 import React from "react";
-import { Helmet } from "react-helmet";
 import CreateJobForm from "@/components/jobs/CreateJobForm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -15,9 +14,6 @@ const CreateJobPage = () => {
 
   return (
     <>
-      <Helmet>
-        <title>Post a New Job | TaskBridge</title>
-      </Helmet>
       <div className="container py-8">
         <h1 className="text-3xl font-bold mb-2">Post a New Job</h1>
         <p className="text-muted-foreground mb-8">
