@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Video, Pause, Play, Square, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Video, Pause, Play, Square, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 interface TaskDetails {
   id: string;
@@ -34,6 +35,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
   const [recordingTime, setRecordingTime] = useState(0);
   const [warningShown, setWarningShown] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -52,7 +54,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && status === "recording" && !warningShown) {
+      if (document.hidden && status === "recording" && !isFullScreen && !warningShown) {
         toast.warning("Tab switching detected! Your recording may be invalidated.");
         setWarningShown(true);
       }
@@ -62,7 +64,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [status, warningShown]);
+  }, [status, warningShown, isFullScreen]);
 
   const startRecording = async () => {
     setStatus("preparing");
@@ -73,6 +75,12 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
         },
         audio: true,
       });
+
+      // Check if entire screen is shared
+      const videoTrack = displayStream.getVideoTracks()[0];
+      // @ts-ignore - displaySurface exists on browser implementations but not in TypeScript types
+      const isEntireScreen = videoTrack?.getSettings()?.displaySurface === "monitor";
+      setIsFullScreen(isEntireScreen);
 
       const audioStream = await navigator.mediaDevices.getUserMedia({ 
         audio: true,
@@ -110,6 +118,13 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
       }, 1000);
 
       toast.success("Recording started successfully");
+      
+      if (isEntireScreen) {
+        toast.info("Full screen detected. You may switch tabs while recording.");
+      } else {
+        toast.info("Tab recording detected. Please don't switch tabs during recording.");
+      }
+      
     } catch (error) {
       console.error("Error starting screen recording:", error);
       setStatus("idle");
@@ -257,6 +272,14 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
                     ))}
                   </ul>
                 </div>
+                
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Recording Tips</AlertTitle>
+                  <AlertDescription>
+                    For best results, share your entire screen when prompted. This will allow you to switch tabs during the recording.
+                  </AlertDescription>
+                </Alert>
               </div>
             </ScrollArea>
           </TabsContent>
@@ -292,7 +315,17 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({ task, onSubmit }) => {
           </div>
         )}
         
-        {warningShown && (
+        {isFullScreen && status === "recording" && (
+          <Alert variant="default" className="bg-green-500/10 border-green-500/30">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <AlertTitle>Full Screen Detected</AlertTitle>
+            <AlertDescription>
+              You are sharing your entire screen. You may switch tabs while recording.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {warningShown && !isFullScreen && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Warning</AlertTitle>

@@ -61,13 +61,13 @@ const JobDetailsPage = () => {
     }
 
     try {
-      // First, create a new application record
+      // First, create a new application record with a valid status value
       const { data: application, error: applicationError } = await supabase
         .from("applications")
         .insert({
           job_id: job.id,
           student_id: user.id,
-          status: "submitted",
+          status: "completed", // Updated to use a valid status value
           started_at: new Date().toISOString(),
           completed_at: new Date().toISOString()
         })
@@ -122,9 +122,9 @@ const JobDetailsPage = () => {
 
   const taskMock = {
     id: "task1",
-    title: job.title,
-    description: job.task_instructions,
-    instructions: job.requirements,
+    title: job?.title || "",
+    description: job?.task_instructions || "",
+    instructions: job?.requirements || [],
     timeLimit: 60 // minutes
   };
   
