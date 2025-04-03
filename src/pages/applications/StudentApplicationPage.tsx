@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import AIReviewPanel from "@/components/ai/AIReviewPanel";
+import RecordingPreview from "@/components/tasks/components/RecordingPreview";
 
 type ApplicationData = Database['public']['Tables']['applications']['Row'];
 type ProfileData = Database['public']['Tables']['profiles']['Row'];
@@ -17,6 +20,12 @@ interface CodeQualityMetrics {
   correctness: number;
   efficiency: number;
   best_practices: number;
+}
+
+interface CommunicationMetrics {
+  clarity: number;
+  confidence: number;
+  content: number;
 }
 
 const StudentApplicationPage = () => {
@@ -139,6 +148,8 @@ const StudentApplicationPage = () => {
     best_practices: 0
   };
 
+  let communicationMetrics: CommunicationMetrics | undefined;
+
   if (aiReview?.code_quality) {
     try {
       // Try to parse if it's a string, or use directly if it's already an object
@@ -159,6 +170,7 @@ const StudentApplicationPage = () => {
   }
 
   const isCompleted = application.status !== 'pending' && application.status !== 'in_progress';
+  const taskType = job.task_type?.toLowerCase() || 'coding';
 
   return (
     <div className="container py-10">
@@ -220,13 +232,13 @@ const StudentApplicationPage = () => {
                 <CardTitle>Your Submission</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="aspect-video bg-black/20 rounded-md overflow-hidden relative">
-                  <video 
-                    ref={videoRef} 
-                    className="w-full h-full" 
-                    controls
-                  />
-                </div>
+                <RecordingPreview 
+                  status="completed" 
+                  videoRef={videoRef} 
+                  recordingUrl={application.recording_url} 
+                  onPlayRecording={playRecording}
+                  isPlayback={true}
+                />
                 <p className="text-sm text-muted-foreground mt-4">
                   This is your recording submitted on {new Date(application.completed_at || application.created_at).toLocaleString()}
                 </p>
@@ -237,59 +249,18 @@ const StudentApplicationPage = () => {
 
         <TabsContent value="results" className="space-y-6">
           {aiReview ? (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Overall Assessment</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-4">
-                    <span className="text-4xl font-bold">{aiReview.score}/5</span>
-                    <p className="mt-2">{aiReview.summary}</p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-muted p-4 rounded-lg">
-                      <h3 className="font-semibold mb-2">Correctness</h3>
-                      <div className="text-3xl font-bold">{codeQualityMetrics.correctness}/5</div>
-                    </div>
-                    <div className="bg-muted p-4 rounded-lg">
-                      <h3 className="font-semibold mb-2">Efficiency</h3>
-                      <div className="text-3xl font-bold">{codeQualityMetrics.efficiency}/5</div>
-                    </div>
-                    <div className="bg-muted p-4 rounded-lg">
-                      <h3 className="font-semibold mb-2">Best Practices</h3>
-                      <div className="text-3xl font-bold">{codeQualityMetrics.best_practices}/5</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Strengths</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc list-inside space-y-2">
-                      {aiReview.strengths.map((strength, index) => (
-                        <li key={index}>{strength}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Areas to Improve</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc list-inside space-y-2">
-                      {aiReview.areas_to_improve.map((area, index) => (
-                        <li key={index}>{area}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
+            <AIReviewPanel 
+              score={aiReview.score}
+              feedback={{
+                summary: aiReview.summary,
+                strengths: aiReview.strengths,
+                areas_to_improve: aiReview.areas_to_improve,
+                code_quality: codeQualityMetrics,
+                communication: communicationMetrics,
+                overall_recommendation: aiReview.overall_recommendation
+              }}
+              taskType={taskType as 'coding' | 'design' | 'presentation'}
+            />
           ) : (
             <Card>
               <CardContent className="py-8">
