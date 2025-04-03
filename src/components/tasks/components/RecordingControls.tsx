@@ -1,10 +1,11 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Video, Pause, Play, Square, CheckCircle2 } from "lucide-react";
+import { Video, Pause, Play, Square, CheckCircle2, Loader2 } from "lucide-react";
 
 interface RecordingControlsProps {
   status: "idle" | "preparing" | "recording" | "paused" | "processing" | "completed";
+  isSubmitting?: boolean;
   onStart: () => Promise<void>;
   onPause: () => void;
   onResume: () => void;
@@ -14,6 +15,7 @@ interface RecordingControlsProps {
 
 const RecordingControls: React.FC<RecordingControlsProps> = ({
   status,
+  isSubmitting = false,
   onStart,
   onPause,
   onResume,
@@ -30,7 +32,7 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
     case "preparing":
       return (
         <Button disabled className="w-full">
-          Preparing...
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Preparing...
         </Button>
       );
     case "recording":
@@ -58,13 +60,25 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
     case "processing":
       return (
         <Button disabled className="w-full">
-          Processing...
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
         </Button>
       );
     case "completed":
       return (
-        <Button onClick={onSubmit} className="w-full">
-          <CheckCircle2 className="mr-2 h-4 w-4" /> Submit Recording
+        <Button 
+          onClick={onSubmit} 
+          className="w-full"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="mr-2 h-4 w-4" /> Submit Recording
+            </>
+          )}
         </Button>
       );
     default:

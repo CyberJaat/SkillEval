@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -54,7 +53,7 @@ const JobDetailsPage = () => {
     fetchJob();
   }, [id]);
 
-  const handleSubmitRecording = async (videoBlob: Blob) => {
+  const handleSubmitRecording = async (videoBlob: Blob, recordingUrl?: string) => {
     if (!user || !job) {
       toast.error("You must be logged in to apply");
       return;
@@ -69,15 +68,13 @@ const JobDetailsPage = () => {
           student_id: user.id,
           status: "completed", // Updated to use a valid status value
           started_at: new Date().toISOString(),
-          completed_at: new Date().toISOString()
+          completed_at: new Date().toISOString(),
+          recording_url: recordingUrl || null // Store the recording URL
         })
         .select()
         .single();
 
       if (applicationError) throw applicationError;
-
-      // Upload the recording to Supabase storage would go here
-      // For now, we'll just simulate success
       
       toast.success("Your application has been submitted successfully!");
       setIsApplying(false);
@@ -255,7 +252,11 @@ const JobDetailsPage = () => {
                       Your screen will be recorded as you complete this task. This helps us evaluate your skills.
                     </DialogDescription>
                   </DialogHeader>
-                  <ScreenRecorder task={taskMock} onSubmit={handleSubmitRecording} />
+                  <ScreenRecorder 
+                    task={taskMock} 
+                    onSubmit={handleSubmitRecording} 
+                    jobId={id}
+                  />
                 </DialogContent>
               </Dialog>
             </div>

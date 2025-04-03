@@ -14,6 +14,8 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [warningShown, setWarningShown] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -25,8 +27,12 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
       }
+      // Clean up any objectURL when component unmounts
+      if (recordingUrl) {
+        URL.revokeObjectURL(recordingUrl);
+      }
     };
-  }, [stream]);
+  }, [stream, recordingUrl]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -45,6 +51,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const startRecording = async () => {
     setStatus("preparing");
     try {
+      // Reset recorded chunks and URL when starting a new recording
+      setRecordedChunks([]);
+      if (recordingUrl) {
+        URL.revokeObjectURL(recordingUrl);
+        setRecordingUrl(null);
+      }
+      setRecordingBlob(null);
+
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: { 
           displaySurface: "monitor",
@@ -58,10 +72,17 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       const isEntireScreen = videoTrack?.getSettings()?.displaySurface === "monitor";
       setIsFullScreen(isEntireScreen);
 
-      const audioStream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true,
-        video: false,
-      });
+      // Only try to get audio if available
+      let audioStream: MediaStream;
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: true,
+          video: false,
+        });
+      } catch (error) {
+        console.warn("Could not capture audio, proceeding with video only:", error);
+        audioStream = new MediaStream();
+      }
 
       const combinedStream = new MediaStream([
         ...displayStream.getVideoTracks(),
@@ -143,10 +164,21 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         stream.getTracks().forEach(track => track.stop());
       }
       
-      setTimeout(() => {
+      // Create a new Promise to handle the final dataavailable event
+      const recordingPromise = new Promise<Blob>((resolve) => {
+        mediaRecorder.addEventListener('stop', () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          setRecordingBlob(blob);
+          setRecordingUrl(url);
+          resolve(blob);
+        });
+      });
+      
+      recordingPromise.then(() => {
         setStatus("completed");
         toast.success("Recording completed successfully");
-      }, 1000);
+      });
     }
   };
 
@@ -158,10 +190,23 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Play the recording in the video element if available
+  const playRecording = () => {
+    if (videoRef.current && recordingUrl) {
+      videoRef.current.src = recordingUrl;
+      videoRef.current.play().catch(err => {
+        console.error("Error playing recording:", err);
+        toast.error("Error playing recording");
+      });
+    }
+  };
+
   return {
     status,
     recordingTime,
     recordedChunks,
+    recordingBlob,
+    recordingUrl,
     videoRef,
     isFullScreen,
     warningShown,
@@ -169,6 +214,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     startRecording,
     pauseRecording,
     resumeRecording,
-    stopRecording
+    stopRecording,
+    playRecording
   };
 };

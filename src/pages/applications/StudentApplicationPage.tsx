@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +27,7 @@ const StudentApplicationPage = () => {
   const [aiReview, setAIReview] = useState<AIReviewData | null>(null);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -104,6 +104,16 @@ const StudentApplicationPage = () => {
 
     fetchData();
   }, [id]);
+
+  const playRecording = () => {
+    if (videoRef.current && application?.recording_url) {
+      videoRef.current.src = application.recording_url;
+      videoRef.current.play().catch(err => {
+        console.error("Error playing recording:", err);
+        toast.error("Error playing recording");
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -196,96 +206,119 @@ const StudentApplicationPage = () => {
         </div>
       </div>
 
-      {isCompleted && (
-        <Tabs defaultValue="results" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="results">Results</TabsTrigger>
-            <TabsTrigger value="feedback">Feedback</TabsTrigger>
-          </TabsList>
-          <TabsContent value="results" className="space-y-6">
-            {aiReview ? (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Overall Assessment</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-4">
-                      <span className="text-4xl font-bold">{aiReview.score}/5</span>
-                      <p className="mt-2">{aiReview.summary}</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="bg-muted p-4 rounded-lg">
-                        <h3 className="font-semibold mb-2">Correctness</h3>
-                        <div className="text-3xl font-bold">{codeQualityMetrics.correctness}/5</div>
-                      </div>
-                      <div className="bg-muted p-4 rounded-lg">
-                        <h3 className="font-semibold mb-2">Efficiency</h3>
-                        <div className="text-3xl font-bold">{codeQualityMetrics.efficiency}/5</div>
-                      </div>
-                      <div className="bg-muted p-4 rounded-lg">
-                        <h3 className="font-semibold mb-2">Best Practices</h3>
-                        <div className="text-3xl font-bold">{codeQualityMetrics.best_practices}/5</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Strengths</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="list-disc list-inside space-y-2">
-                        {aiReview.strengths.map((strength, index) => (
-                          <li key={index}>{strength}</li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Areas to Improve</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="list-disc list-inside space-y-2">
-                        {aiReview.areas_to_improve.map((area, index) => (
-                          <li key={index}>{area}</li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </>
-            ) : (
-              <Card>
-                <CardContent className="py-8">
-                  <p className="text-center text-muted-foreground">Results are not available yet.</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          <TabsContent value="feedback">
+      <Tabs defaultValue={application.recording_url ? "recording" : "results"} className="w-full">
+        <TabsList className="mb-6">
+          {application.recording_url && <TabsTrigger value="recording">Your Recording</TabsTrigger>}
+          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="feedback">Feedback</TabsTrigger>
+        </TabsList>
+
+        {application.recording_url && (
+          <TabsContent value="recording" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Recruiter Feedback</CardTitle>
+                <CardTitle>Your Submission</CardTitle>
               </CardHeader>
               <CardContent>
-                {feedback ? (
-                  <div className="prose dark:prose-invert max-w-none">
-                    <p>{feedback.feedback}</p>
-                    <p className="text-sm text-muted-foreground mt-4">
-                      Last updated: {new Date(feedback.updated_at).toLocaleString()}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground">No feedback has been provided yet.</p>
-                )}
+                <div className="aspect-video bg-black/20 rounded-md overflow-hidden relative">
+                  <video 
+                    ref={videoRef} 
+                    className="w-full h-full" 
+                    controls
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  This is your recording submitted on {new Date(application.completed_at || application.created_at).toLocaleString()}
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
-      )}
+        )}
+
+        <TabsContent value="results" className="space-y-6">
+          {aiReview ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Overall Assessment</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-4">
+                    <span className="text-4xl font-bold">{aiReview.score}/5</span>
+                    <p className="mt-2">{aiReview.summary}</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h3 className="font-semibold mb-2">Correctness</h3>
+                      <div className="text-3xl font-bold">{codeQualityMetrics.correctness}/5</div>
+                    </div>
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h3 className="font-semibold mb-2">Efficiency</h3>
+                      <div className="text-3xl font-bold">{codeQualityMetrics.efficiency}/5</div>
+                    </div>
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h3 className="font-semibold mb-2">Best Practices</h3>
+                      <div className="text-3xl font-bold">{codeQualityMetrics.best_practices}/5</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Strengths</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc list-inside space-y-2">
+                      {aiReview.strengths.map((strength, index) => (
+                        <li key={index}>{strength}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Areas to Improve</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc list-inside space-y-2">
+                      {aiReview.areas_to_improve.map((area, index) => (
+                        <li key={index}>{area}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-8">
+                <p className="text-center text-muted-foreground">Results are not available yet.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="feedback">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recruiter Feedback</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {feedback ? (
+                <div className="prose dark:prose-invert max-w-none">
+                  <p>{feedback.feedback}</p>
+                  <p className="text-sm text-muted-foreground mt-4">
+                    Last updated: {new Date(feedback.updated_at).toLocaleString()}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground">No feedback has been provided yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {application.status === 'pending' && (
         <Card>
