@@ -80,7 +80,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       timerRef.current = interval as unknown as number;
       
       return () => clearInterval(interval);
-    } else if (timerRef.current && status !== "recording") {
+    } else if (timerRef.current) {
       clearInterval(timerRef.current);
     }
   }, [status]);
