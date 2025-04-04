@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
@@ -164,6 +163,9 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         console.log("Bucket: recordings");
         console.log("File name:", fileName);
         console.log("File size:", recordingBlob.size, "bytes");
+        
+        // FIX: Add delay before upload to ensure blob is properly formed
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Upload to 'recordings' bucket
         const { data: uploadData, error: uploadError } = await supabase.storage

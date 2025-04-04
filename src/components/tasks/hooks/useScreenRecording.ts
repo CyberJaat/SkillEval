@@ -170,6 +170,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       
       console.log(`Using MIME type: ${mimeType}`);
 
+      // CRITICAL FIX: Create MediaRecorder with more reliable options
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
         videoBitsPerSecond: 2500000 // 2.5 Mbps
@@ -177,32 +178,42 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       
       console.log("MediaRecorder created with state:", recorder.state);
 
-      // Important fix: Ensure we're capturing data properly
+      // FIX: Improve data handling with more reliable approach
       recorder.ondataavailable = (event) => {
         console.log("Data available event:", event.data.size, "bytes");
         if (event.data && event.data.size > 0) {
+          // Important: Update both the ref and the state
           recordedChunksRef.current.push(event.data);
           setRecordedChunks(prev => [...prev, event.data]);
+          console.log("Total chunks collected:", recordedChunksRef.current.length);
         }
+      };
+
+      // FIX: Add error handling for recorder
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        toast.error("Recording error occurred. Please try again.");
       };
 
       setMediaRecorder(recorder);
       mediaRecorderRef.current = recorder;
       
-      // Start capturing more frequently to ensure we get data
-      recorder.start(500); 
-      console.log("MediaRecorder started");
+      // IMPORTANT FIX: Start capturing more frequently (100ms) to ensure we get data
+      recorder.start(100);
+      console.log("MediaRecorder started with timeslice of 100ms");
       
-      // Fix: Ensure status is set to recording only after recorder has started
-      setStatus("recording");
-      
-      toast.success("Recording started successfully");
-      
-      if (isEntireScreen) {
-        toast.info("Full screen detected. You may switch tabs while recording.");
-      } else {
-        toast.info("Tab recording detected. Please don't switch tabs during recording.");
-      }
+      // FIX: Set status to recording only after recorder has definitely started
+      setTimeout(() => {
+        setStatus("recording");
+        console.log("Recording status set to 'recording'");
+        toast.success("Recording started successfully");
+        
+        if (isEntireScreen) {
+          toast.info("Full screen detected. You may switch tabs while recording.");
+        } else {
+          toast.info("Tab recording detected. Please don't switch tabs during recording.");
+        }
+      }, 100);
       
       // Add event listener for when user stops sharing screen
       displayStream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -255,46 +266,51 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       
       const recorder = mediaRecorder || mediaRecorderRef.current;
       
-      // Force one last data capture before stopping
+      // FIX: Improved handling of the recording data
       if (recorder && recorder.state !== "inactive") {
         try {
-          // Request a final dataavailable event
+          // FIX: Force collection of any pending data
           recorder.requestData();
           
-          // Create a new Promise to handle the final recording
-          const recordingPromise = new Promise<Blob>((resolve, reject) => {
-            // Set timeout to ensure we don't hang indefinitely
+          console.log("Current chunks before stopping:", recordedChunksRef.current.length);
+          
+          // FIX: Create a more reliable promise-based approach
+          const recordingPromise = new Promise<void>((resolve, reject) => {
+            // Timeout as a safety net
             const timeoutId = setTimeout(() => {
+              console.log("Recording stop timeout triggered");
               if (recordedChunksRef.current.length === 0) {
-                reject(new Error("No recording data was captured in the alloted time"));
+                reject(new Error("No recording data was captured"));
               } else {
                 processRecordedChunks(recordedChunksRef.current, recorder.mimeType || 'video/webm')
-                  .then(resolve)
+                  .then(() => resolve())
                   .catch(reject);
               }
             }, 2000);
             
-            const stopHandler = () => {
+            // Listen for the stop event
+            recorder.addEventListener('stop', () => {
               clearTimeout(timeoutId);
               console.log("MediaRecorder stopped event fired");
-              console.log(`Processing ${recordedChunksRef.current.length} chunks from ref`);
+              console.log(`Processing ${recordedChunksRef.current.length} chunks`);
               
               if (recordedChunksRef.current.length === 0) {
-                console.warn("No recorded chunks available");
-                reject(new Error("No recording data captured"));
+                console.warn("No recorded chunks available after stop event");
+                reject(new Error("No recording data was captured during the session"));
                 return;
               }
               
               processRecordedChunks(recordedChunksRef.current, recorder.mimeType || 'video/webm')
-                .then(resolve)
+                .then(() => resolve())
                 .catch(reject);
-            };
+            }, { once: true });
             
-            recorder.addEventListener('stop', stopHandler, { once: true });
+            // Actually stop the recorder
+            recorder.stop();
+            console.log("MediaRecorder.stop() called");
           });
           
-          recorder.stop();
-          
+          // Handle the recording process
           recordingPromise
             .then(() => {
               setStatus("completed");
@@ -312,17 +328,24 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         }
       } else {
         console.log("MediaRecorder already inactive, processing chunks directly");
-        // If the mediaRecorder is already inactive, create the blob directly
-        processRecordedChunks(recordedChunksRef.current, 'video/webm')
-          .then(() => {
-            setStatus("completed");
-            toast.success("Recording completed successfully");
-          })
-          .catch(err => {
-            console.error("Error processing recording:", err);
-            setStatus("idle");
-            toast.error(`Error processing recording: ${err.message}. Please try again.`);
-          });
+        
+        // FIX: Handle the case when we already have chunks but recorder is inactive
+        if (recordedChunksRef.current.length > 0) {
+          processRecordedChunks(recordedChunksRef.current, 'video/webm')
+            .then(() => {
+              setStatus("completed");
+              toast.success("Recording completed successfully");
+            })
+            .catch(err => {
+              console.error("Error processing recording:", err);
+              setStatus("idle");
+              toast.error(`Error processing recording: ${err.message}. Please try again.`);
+            });
+        } else {
+          console.error("No recorded chunks and recorder is inactive");
+          setStatus("idle");
+          toast.error("No recording data was captured. Please try again.");
+        }
       }
     }
   }, [mediaRecorder, status, stream]);
