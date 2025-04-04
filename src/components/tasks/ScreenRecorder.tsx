@@ -49,6 +49,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   const [hasAlreadyApplied, setHasAlreadyApplied] = useState(false);
   const [isCheckingApplication, setIsCheckingApplication] = useState(!!jobId);
   const [videoPlaybackError, setVideoPlaybackError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("instructions");
   
   const {
     status,
@@ -66,6 +67,13 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     stopRecording,
     playRecording
   } = useScreenRecording({ timeLimit });
+
+  // Switch to recording preview tab when recording starts
+  useEffect(() => {
+    if (status === 'recording' && activeTab !== 'recording') {
+      setActiveTab('recording');
+    }
+  }, [status]);
 
   // Check if the user has already applied to this job
   useEffect(() => {
@@ -125,6 +133,11 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
       };
     }
   }, [existingRecordingUrl, videoRef]);
+
+  // Function to handle tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+  };
 
   const handleSubmitRecording = async () => {
     if (!recordingBlob) {
@@ -257,7 +270,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs defaultValue="instructions">
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="w-full">
             <TabsTrigger value="instructions" className="flex-1">Instructions</TabsTrigger>
             <TabsTrigger value="recording" className="flex-1">Recording Preview</TabsTrigger>

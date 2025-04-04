@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
 interface UseScreenRecordingProps {
@@ -19,6 +19,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
   // Cleanup effect
   useEffect(() => {
@@ -69,10 +70,26 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     }
   }, [recordingTime, timeLimit, status]);
 
-  const startRecording = async () => {
+  // This handles timer updates
+  useEffect(() => {
+    if (status === "recording") {
+      const interval = setInterval(() => {
+        setRecordingTime(prevTime => prevTime + 1);
+      }, 1000);
+      
+      timerRef.current = interval as unknown as number;
+      
+      return () => clearInterval(interval);
+    } else if (timerRef.current && status !== "recording") {
+      clearInterval(timerRef.current);
+    }
+  }, [status]);
+
+  const startRecording = useCallback(async () => {
     setStatus("preparing");
     try {
       // Reset recorded chunks and URL when starting a new recording
+      recordedChunksRef.current = [];
       setRecordedChunks([]);
       if (recordingUrl) {
         URL.revokeObjectURL(recordingUrl);
@@ -160,25 +177,25 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       
       console.log("MediaRecorder created with state:", recorder.state);
 
+      // Important fix: Ensure we're capturing data properly
       recorder.ondataavailable = (event) => {
         console.log("Data available event:", event.data.size, "bytes");
-        if (event.data.size > 0) {
-          setRecordedChunks((prev) => [...prev, event.data]);
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+          setRecordedChunks(prev => [...prev, event.data]);
         }
       };
 
       setMediaRecorder(recorder);
       mediaRecorderRef.current = recorder;
       
-      recorder.start(1000); // Capture chunks every second
+      // Start capturing more frequently to ensure we get data
+      recorder.start(500); 
       console.log("MediaRecorder started");
       
+      // Fix: Ensure status is set to recording only after recorder has started
       setStatus("recording");
       
-      timerRef.current = window.setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-
       toast.success("Recording started successfully");
       
       if (isEntireScreen) {
@@ -199,39 +216,34 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       setStatus("idle");
       toast.error(`Failed to start recording: ${error.message || "Please make sure you've granted the necessary permissions."}`);
     }
-  };
+  }, [recordingUrl]);
 
-  const pauseRecording = () => {
+  const pauseRecording = useCallback(() => {
     if (mediaRecorder && status === "recording") {
       console.log("Pausing recording");
       mediaRecorder.pause();
       setStatus("paused");
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-      }
       toast.info("Recording paused");
     }
-  };
+  }, [mediaRecorder, status]);
 
-  const resumeRecording = () => {
+  const resumeRecording = useCallback(() => {
     if (mediaRecorder && status === "paused") {
       console.log("Resuming recording");
       mediaRecorder.resume();
       setStatus("recording");
-      timerRef.current = window.setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
       toast.info("Recording resumed");
     }
-  };
+  }, [mediaRecorder, status]);
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     if ((mediaRecorder || mediaRecorderRef.current) && (status === "recording" || status === "paused")) {
       console.log("Stopping recording");
       setStatus("processing");
       
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
+        timerRef.current = null;
       }
       
       if (stream) {
@@ -243,38 +255,39 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       
       const recorder = mediaRecorder || mediaRecorderRef.current;
       
-      // Ensure mediaRecorder is in a state where it can be stopped
+      // Force one last data capture before stopping
       if (recorder && recorder.state !== "inactive") {
         try {
-          // Create a new Promise to handle the final dataavailable event
-          const recordingPromise = new Promise<Blob>((resolve) => {
+          // Request a final dataavailable event
+          recorder.requestData();
+          
+          // Create a new Promise to handle the final recording
+          const recordingPromise = new Promise<Blob>((resolve, reject) => {
+            // Set timeout to ensure we don't hang indefinitely
+            const timeoutId = setTimeout(() => {
+              if (recordedChunksRef.current.length === 0) {
+                reject(new Error("No recording data was captured in the alloted time"));
+              } else {
+                processRecordedChunks(recordedChunksRef.current, recorder.mimeType || 'video/webm')
+                  .then(resolve)
+                  .catch(reject);
+              }
+            }, 2000);
+            
             const stopHandler = () => {
+              clearTimeout(timeoutId);
               console.log("MediaRecorder stopped event fired");
+              console.log(`Processing ${recordedChunksRef.current.length} chunks from ref`);
               
-              if (recordedChunks.length === 0) {
+              if (recordedChunksRef.current.length === 0) {
                 console.warn("No recorded chunks available");
-                toast.error("No recording data was captured. Please try again.");
-                setStatus("idle");
+                reject(new Error("No recording data captured"));
                 return;
               }
               
-              // Create a blob from all chunks
-              console.log(`Creating blob from ${recordedChunks.length} chunks`);
-              const blob = new Blob(recordedChunks, { type: recorder.mimeType || 'video/webm' });
-              console.log("Created blob of size:", blob.size, "bytes");
-              
-              const url = URL.createObjectURL(blob);
-              setRecordingBlob(blob);
-              setRecordingUrl(url);
-              
-              // If there's a video element, set the source to the recording
-              if (videoRef.current) {
-                videoRef.current.srcObject = null;
-                videoRef.current.src = url;
-                videoRef.current.muted = false; // Unmute for playback
-              }
-              
-              resolve(blob);
+              processRecordedChunks(recordedChunksRef.current, recorder.mimeType || 'video/webm')
+                .then(resolve)
+                .catch(reject);
             };
             
             recorder.addEventListener('stop', stopHandler, { once: true });
@@ -282,45 +295,64 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
           
           recorder.stop();
           
-          recordingPromise.then(() => {
-            setStatus("completed");
-            toast.success("Recording completed successfully");
-          }).catch(err => {
-            console.error("Error finalizing recording:", err);
-            setStatus("idle");
-            toast.error("Error finalizing recording. Please try again.");
-          });
-        } catch (err) {
+          recordingPromise
+            .then(() => {
+              setStatus("completed");
+              toast.success("Recording completed successfully");
+            })
+            .catch(err => {
+              console.error("Error finalizing recording:", err);
+              setStatus("idle");
+              toast.error(`Error finalizing recording: ${err.message}. Please try again.`);
+            });
+        } catch (err: any) {
           console.error("Error stopping MediaRecorder:", err);
           setStatus("idle");
-          toast.error("Error stopping recording. Please try again.");
+          toast.error(`Error stopping recording: ${err.message}. Please try again.`);
         }
       } else {
         console.log("MediaRecorder already inactive, processing chunks directly");
         // If the mediaRecorder is already inactive, create the blob directly
-        if (recordedChunks.length === 0) {
-          console.warn("No recorded chunks available");
-          setStatus("idle");
-          toast.error("No recording data was captured. Please try again.");
-          return;
-        }
-        
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        setRecordingBlob(blob);
-        setRecordingUrl(url);
-        
-        // If there's a video element, set the source to the recording
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
-          videoRef.current.src = url;
-          videoRef.current.muted = false; // Unmute for playback
-        }
-        
-        setStatus("completed");
-        toast.success("Recording completed successfully");
+        processRecordedChunks(recordedChunksRef.current, 'video/webm')
+          .then(() => {
+            setStatus("completed");
+            toast.success("Recording completed successfully");
+          })
+          .catch(err => {
+            console.error("Error processing recording:", err);
+            setStatus("idle");
+            toast.error(`Error processing recording: ${err.message}. Please try again.`);
+          });
       }
     }
+  }, [mediaRecorder, status, stream]);
+
+  // Helper function to process recorded chunks
+  const processRecordedChunks = async (chunks: Blob[], mimeType: string): Promise<Blob> => {
+    if (!chunks.length) {
+      throw new Error("No recording data was captured");
+    }
+    
+    console.log(`Creating blob from ${chunks.length} chunks`);
+    const blob = new Blob(chunks, { type: mimeType });
+    console.log("Created blob of size:", blob.size, "bytes");
+    
+    if (blob.size <= 0) {
+      throw new Error("Recording data was empty");
+    }
+    
+    const url = URL.createObjectURL(blob);
+    setRecordingBlob(blob);
+    setRecordingUrl(url);
+    
+    // If there's a video element, set the source to the recording
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current.src = url;
+      videoRef.current.muted = false; // Unmute for playback
+    }
+    
+    return blob;
   };
 
   const formatTime = (seconds: number) => {
@@ -332,7 +364,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   };
 
   // Play the recording in the video element if available
-  const playRecording = () => {
+  const playRecording = useCallback(() => {
     if (videoRef.current && recordingUrl) {
       console.log("Playing recording from URL:", recordingUrl);
       videoRef.current.src = recordingUrl;
@@ -343,7 +375,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     } else if (!recordingUrl) {
       console.error("No recording URL available to play");
     }
-  };
+  }, [recordingUrl]);
 
   return {
     status,

@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 interface RecordingTimerProps {
   status: "idle" | "preparing" | "recording" | "paused" | "processing" | "completed";
@@ -7,6 +7,13 @@ interface RecordingTimerProps {
 }
 
 const RecordingTimer: React.FC<RecordingTimerProps> = ({ status, formattedTime }) => {
+  const [time, setTime] = useState(formattedTime);
+  
+  // Ensure timer display updates even if the parent state doesn't update
+  useEffect(() => {
+    setTime(formattedTime);
+  }, [formattedTime]);
+
   if (status === "idle" || status === "preparing") {
     return null;
   }
@@ -25,7 +32,7 @@ const RecordingTimer: React.FC<RecordingTimerProps> = ({ status, formattedTime }
         </span>
       </div>
       <div className="text-sm font-mono">
-        {formattedTime}
+        {time}
       </div>
     </div>
   );
