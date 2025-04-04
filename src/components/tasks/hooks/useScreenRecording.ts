@@ -19,6 +19,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<number | null>(null);
 
+  // Cleanup effect
   useEffect(() => {
     return () => {
       if (stream) {
@@ -34,6 +35,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     };
   }, [stream, recordingUrl]);
 
+  // Tab visibility warning
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && status === "recording" && !isFullScreen && !warningShown) {
@@ -48,6 +50,15 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     };
   }, [status, warningShown, isFullScreen]);
 
+  // Automatic stop recording when time limit is reached
+  useEffect(() => {
+    // Check if recording time exceeds time limit (in minutes)
+    if (status === "recording" && recordingTime >= timeLimit * 60) {
+      toast.info(`Time limit of ${timeLimit} minutes reached. Stopping recording.`);
+      stopRecording();
+    }
+  }, [recordingTime, timeLimit, status]);
+
   const startRecording = async () => {
     setStatus("preparing");
     try {
@@ -58,6 +69,8 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         setRecordingUrl(null);
       }
       setRecordingBlob(null);
+      setRecordingTime(0);
+      setWarningShown(false);
 
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: { 
@@ -122,6 +135,12 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         toast.info("Tab recording detected. Please don't switch tabs during recording.");
       }
       
+      // Add event listener for when user stops sharing screen
+      displayStream.getVideoTracks()[0].addEventListener('ended', () => {
+        stopRecording();
+        toast.info("Screen sharing ended. Recording stopped.");
+      });
+      
     } catch (error) {
       console.error("Error starting screen recording:", error);
       setStatus("idle");
@@ -152,9 +171,8 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorder) {
+    if (mediaRecorder && (status === "recording" || status === "paused")) {
       setStatus("processing");
-      mediaRecorder.stop();
       
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
@@ -164,21 +182,49 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         stream.getTracks().forEach(track => track.stop());
       }
       
-      // Create a new Promise to handle the final dataavailable event
-      const recordingPromise = new Promise<Blob>((resolve) => {
-        mediaRecorder.addEventListener('stop', () => {
-          const blob = new Blob(recordedChunks, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          setRecordingBlob(blob);
-          setRecordingUrl(url);
-          resolve(blob);
+      // Ensure mediaRecorder is in a state where it can be stopped
+      if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        
+        // Create a new Promise to handle the final dataavailable event
+        const recordingPromise = new Promise<Blob>((resolve) => {
+          mediaRecorder.addEventListener('stop', () => {
+            // Create a blob from all chunks
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            setRecordingBlob(blob);
+            setRecordingUrl(url);
+            
+            // If there's a video element, set the source to the recording
+            if (videoRef.current) {
+              videoRef.current.srcObject = null;
+              videoRef.current.src = url;
+            }
+            
+            resolve(blob);
+          });
         });
-      });
-      
-      recordingPromise.then(() => {
+        
+        recordingPromise.then(() => {
+          setStatus("completed");
+          toast.success("Recording completed successfully");
+        });
+      } else {
+        // If the mediaRecorder is already inactive, create the blob directly
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        setRecordingBlob(blob);
+        setRecordingUrl(url);
+        
+        // If there's a video element, set the source to the recording
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+          videoRef.current.src = url;
+        }
+        
         setStatus("completed");
         toast.success("Recording completed successfully");
-      });
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Card,
@@ -77,7 +77,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
       try {
         const { data, error } = await supabase
           .from("applications")
-          .select("id")
+          .select("id, recording_url")
           .eq("job_id", jobId)
           .eq("student_id", user.id)
           .maybeSingle();
@@ -87,7 +87,12 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         // If there's already an application, set the flag
         if (data) {
           setHasAlreadyApplied(true);
-          toast.warning("You have already applied to this job.");
+          if (data.recording_url) {
+            // If there's a recording URL, play it
+            if (videoRef.current) {
+              videoRef.current.src = data.recording_url;
+            }
+          }
         }
       } catch (error) {
         console.error("Error checking existing application:", error);
@@ -97,7 +102,14 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     };
 
     checkExistingApplication();
-  }, [jobId, user]);
+  }, [jobId, user, videoRef]);
+
+  useEffect(() => {
+    // If we have an existing recording URL, prepare the video player
+    if (existingRecordingUrl && videoRef.current) {
+      videoRef.current.src = existingRecordingUrl;
+    }
+  }, [existingRecordingUrl, videoRef]);
 
   const handleSubmitRecording = async () => {
     if (!recordingBlob) {
