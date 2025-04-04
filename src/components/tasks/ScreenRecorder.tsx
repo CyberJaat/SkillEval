@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+
+import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Card,
@@ -18,6 +19,16 @@ import RecordingInstructions from "./components/RecordingInstructions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TaskDetails {
   id: string;
@@ -49,6 +60,8 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   const [isCheckingApplication, setIsCheckingApplication] = useState(!!jobId);
   const [videoPlaybackError, setVideoPlaybackError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("instructions");
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [showNoDataDialog, setShowNoDataDialog] = useState(false);
   
   const {
     status,
@@ -71,6 +84,11 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   useEffect(() => {
     if (status === 'recording' && activeTab !== 'recording') {
       setActiveTab('recording');
+    }
+    
+    // Reset error state when status changes
+    if (status !== 'idle') {
+      setRecordingError(null);
     }
   }, [status]);
 
@@ -139,8 +157,15 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   };
 
   const handleSubmitRecording = async () => {
+    // Check if we have valid recording data
     if (!recordingBlob) {
-      toast.error("No recording available to submit");
+      setShowNoDataDialog(true);
+      return;
+    }
+    
+    // Check if recording is too small (likely empty)
+    if (recordingBlob.size < 1000) {
+      setRecordingError("The recording appears to be empty or invalid. Please try again.");
       return;
     }
 
@@ -164,7 +189,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         console.log("File name:", fileName);
         console.log("File size:", recordingBlob.size, "bytes");
         
-        // FIX: Add delay before upload to ensure blob is properly formed
+        // Add delay before upload to ensure blob is properly formed
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Upload to 'recordings' bucket
@@ -200,9 +225,17 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     } catch (error: any) {
       console.error("Error uploading recording:", error);
       toast.error(`Error uploading recording: ${error.message}`);
+      setRecordingError(`Failed to upload: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const retryRecording = () => {
+    setShowNoDataDialog(false);
+    setRecordingError(null);
+    // Reset state and try recording again
+    startRecording();
   };
 
   if (isCheckingApplication) {
@@ -298,7 +331,8 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         <StatusAlerts 
           isFullScreen={isFullScreen} 
           warningShown={warningShown} 
-          status={status} 
+          status={status}
+          recordingError={recordingError} 
         />
       </CardContent>
       <CardFooter className="flex justify-center">
@@ -312,6 +346,23 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
           onSubmit={handleSubmitRecording}
         />
       </CardFooter>
+
+      {/* No data dialog */}
+      <AlertDialog open={showNoDataDialog} onOpenChange={setShowNoDataDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No Recording Data</AlertDialogTitle>
+            <AlertDialogDescription>
+              No recording data was captured. This could be due to browser permissions or 
+              settings that prevented the screen recording from working correctly.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={retryRecording}>Try Again</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
