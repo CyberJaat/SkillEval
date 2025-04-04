@@ -48,6 +48,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAlreadyApplied, setHasAlreadyApplied] = useState(false);
   const [isCheckingApplication, setIsCheckingApplication] = useState(!!jobId);
+  const [videoPlaybackError, setVideoPlaybackError] = useState<string | null>(null);
   
   const {
     status,
@@ -108,6 +109,20 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     // If we have an existing recording URL, prepare the video player
     if (existingRecordingUrl && videoRef.current) {
       videoRef.current.src = existingRecordingUrl;
+      
+      // Add error handling for video loading
+      const handleVideoError = () => {
+        console.error("Error loading video from URL:", existingRecordingUrl);
+        setVideoPlaybackError("Error loading video. The recording might be unavailable.");
+      };
+      
+      videoRef.current.onerror = handleVideoError;
+      
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.onerror = null;
+        }
+      };
     }
   }, [existingRecordingUrl, videoRef]);
 
@@ -132,6 +147,11 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         // Create a filename with user ID and timestamp
         const fileName = `recording_${user.id}_${Date.now()}.webm`;
         
+        console.log("Uploading recording to Supabase Storage");
+        console.log("Bucket: recordings");
+        console.log("File name:", fileName);
+        console.log("File size:", recordingBlob.size, "bytes");
+        
         // Upload to 'recordings' bucket
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('recordings')
@@ -140,7 +160,12 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
             upsert: true
           });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Upload error details:", uploadError);
+          throw uploadError;
+        }
+        
+        console.log("Upload successful:", uploadData);
         
         // Get public URL
         const { data: publicUrlData } = await supabase.storage
@@ -148,6 +173,10 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
           .getPublicUrl(fileName);
           
         uploadedUrl = publicUrlData.publicUrl;
+        console.log("Public URL:", uploadedUrl);
+      } else {
+        console.error("No user is authenticated, cannot upload recording");
+        throw new Error("You must be logged in to submit a recording");
       }
       
       // Call the onSubmit function with the recording blob and URL
@@ -198,13 +227,22 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <RecordingPreview 
-            status="completed" 
-            videoRef={videoRef}
-            recordingUrl={existingRecordingUrl}
-            onPlayRecording={playRecording}
-            isPlayback={true}
-          />
+          {videoPlaybackError ? (
+            <div className="p-6 bg-destructive/10 rounded-md text-center">
+              <p className="text-destructive font-medium">{videoPlaybackError}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                The recording might have been removed or is temporarily unavailable.
+              </p>
+            </div>
+          ) : (
+            <RecordingPreview 
+              status="completed" 
+              videoRef={videoRef}
+              recordingUrl={existingRecordingUrl}
+              onPlayRecording={playRecording}
+              isPlayback={true}
+            />
+          )}
         </CardContent>
       </Card>
     );

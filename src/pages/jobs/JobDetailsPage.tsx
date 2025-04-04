@@ -19,12 +19,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Database } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 
 type Job = Database['public']['Tables']['jobs']['Row'];
 type Application = Database['public']['Tables']['applications']['Row'] & {
   profiles: {
     first_name: string;
     last_name: string;
+    avatar_url: string | null;
   }
 };
 
@@ -34,10 +36,12 @@ const JobDetailsPage = () => {
   const [job, setJob] = useState<Job | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingApplications, setLoadingApplications] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const isRecruiter = profile?.user_type === "recruiter";
+  const isOwnJob = isRecruiter && job?.recruiter_id === user?.id;
   const [existingApplication, setExistingApplication] = useState<{id: string, recording_url: string | null} | null>(null);
   
   useEffect(() => {
@@ -69,21 +73,9 @@ const JobDetailsPage = () => {
           }
         }
 
-        // If recruiter, fetch all applications for this job
+        // If recruiter's own job, fetch all applications
         if (profile?.user_type === "recruiter") {
-          const { data: applicationsData, error: applicationsError } = await supabase
-            .from("applications")
-            .select(`
-              *,
-              profiles:student_id (
-                first_name,
-                last_name
-              )
-            `)
-            .eq("job_id", id);
-
-          if (applicationsError) throw applicationsError;
-          setApplications(applicationsData as Application[]);
+          fetchApplications(data);
         }
       } catch (err: any) {
         console.error("Error fetching job:", err);
@@ -96,6 +88,38 @@ const JobDetailsPage = () => {
     fetchJob();
   }, [id, user, profile?.user_type]);
 
+  const fetchApplications = async (jobData: Job) => {
+    if (!user || profile?.user_type !== "recruiter") return;
+    
+    try {
+      setLoadingApplications(true);
+      
+      // Only fetch applications if the recruiter owns this job
+      if (jobData.recruiter_id === user.id) {
+        const { data: applicationsData, error: applicationsError } = await supabase
+          .from("applications")
+          .select(`
+            *,
+            profiles:student_id (
+              first_name,
+              last_name,
+              avatar_url
+            )
+          `)
+          .eq("job_id", id)
+          .order("created_at", { ascending: false });
+
+        if (applicationsError) throw applicationsError;
+        setApplications(applicationsData as Application[]);
+      }
+    } catch (err: any) {
+      console.error("Error fetching applications:", err);
+      toast.error("Failed to load applications");
+    } finally {
+      setLoadingApplications(false);
+    }
+  };
+
   const handleSubmitRecording = async (videoBlob: Blob, recordingUrl?: string) => {
     if (!user || !job) {
       toast.error("You must be logged in to apply");
@@ -103,6 +127,8 @@ const JobDetailsPage = () => {
     }
 
     try {
+      console.log("Creating application record with recording URL:", recordingUrl);
+      
       // First, create a new application record with a valid status value
       const { data: application, error: applicationError } = await supabase
         .from("applications")
@@ -117,7 +143,12 @@ const JobDetailsPage = () => {
         .select()
         .single();
 
-      if (applicationError) throw applicationError;
+      if (applicationError) {
+        console.error("Application creation error:", applicationError);
+        throw applicationError;
+      }
+      
+      console.log("Application created successfully:", application);
       
       toast.success("Your application has been submitted successfully!");
       setIsApplying(false);
@@ -221,8 +252,8 @@ const JobDetailsPage = () => {
             </div>
             
             <div className="flex flex-wrap gap-2 mb-6">
-              {job.requirements.slice(0, 6).map((skill) => (
-                <Badge key={skill} variant="secondary" className="font-normal">
+              {job.requirements.slice(0, 6).map((skill, index) => (
+                <Badge key={index} variant="secondary" className="font-normal">
                   {skill}
                 </Badge>
               ))}
@@ -280,6 +311,7 @@ const JobDetailsPage = () => {
               </div>
             </div>
             
+            {/* Only show application controls for students, not recruiters */}
             {!isRecruiter && (
               <div className="mt-6 pt-6 border-t border-border/40">
                 <h3 className="font-medium mb-3">Required Task</h3>
@@ -342,6 +374,31 @@ const JobDetailsPage = () => {
                 )}
               </div>
             )}
+            
+            {/* For recruiters, show info about job management instead of application controls */}
+            {isRecruiter && isOwnJob && (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <h3 className="font-medium mb-3">Job Management</h3>
+                <p className="text-sm text-foreground/90 mb-4">
+                  As the recruiter who posted this job, you can view and review all applications.
+                </p>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => navigate("/recruiter/dashboard")}
+                >
+                  Manage All Jobs
+                </Button>
+              </div>
+            )}
+            
+            {isRecruiter && !isOwnJob && (
+              <div className="mt-6 pt-6 border-t border-border/40">
+                <p className="text-sm text-foreground/90 mb-4">
+                  You're viewing this job as a recruiter. Only students can apply for jobs.
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="text-center p-4 rounded-lg glass-panel">
@@ -352,59 +409,82 @@ const JobDetailsPage = () => {
         </div>
       </div>
 
-      {/* Show applications only for recruiters */}
-      {isRecruiter && applications.length > 0 && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
+      {/* Show applications only for recruiters who own this job */}
+      {isRecruiter && isOwnJob && (
+        <div className="mt-8">
+          <Separator className="my-8" />
+          
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
               <UserCircle className="h-5 w-5" />
-              Applications for this job ({applications.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Date Applied</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {applications.map((application) => (
-                  <TableRow key={application.id}>
-                    <TableCell>
-                      {application.profiles?.first_name} {application.profiles?.last_name}
-                    </TableCell>
-                    <TableCell>{new Date(application.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell>{getStatusBadge(application.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(`/recruiter/applications/${application.id}`)}
-                      >
-                        Review
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {isRecruiter && applications.length === 0 && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="text-xl">Applications</CardTitle>
-          </CardHeader>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No applications have been submitted yet.</p>
-          </CardContent>
-        </Card>
+              Job Applications
+            </h2>
+          </div>
+          
+          {loadingApplications ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : applications.length > 0 ? (
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead>Date Applied</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {applications.map((application) => (
+                      <TableRow key={application.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium overflow-hidden">
+                              {application.profiles?.avatar_url ? (
+                                <img 
+                                  src={application.profiles.avatar_url} 
+                                  alt={`${application.profiles.first_name} ${application.profiles.last_name}`}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <UserCircle className="h-5 w-5" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">
+                                {application.profiles?.first_name} {application.profiles?.last_name}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{new Date(application.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{getStatusBadge(application.status)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => navigate(`/recruiter/applications/${application.id}`)}
+                          >
+                            Review
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">No applications have been submitted yet.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
