@@ -17,6 +17,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordedChunksCount, setRecordedChunksCount] = useState(0);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -26,6 +27,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const isStoppingRef = useRef<boolean>(false);
   const visibilityChangeHandledRef = useRef<boolean>(false);
   const pageLoadEventSet = useRef<boolean>(false);
+  const tabFocusedRef = useRef<boolean>(true);
 
   // Cleanup effect
   useEffect(() => {
@@ -76,27 +78,43 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     }
   }, [status]);
 
-  // Tab visibility warning with persistent recording
+  // More robust tab visibility handling
   useEffect(() => {
-    // Only set up visibility handler if not already done
-    if (!visibilityChangeHandledRef.current) {
-      const handleVisibilityChange = () => {
-        if (document.hidden && status === "recording" && !isFullScreen && !warningShown) {
-          // Just show a warning without stopping the recording
+    // Prevent reloading or resetting when tab visibility changes
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        tabFocusedRef.current = false;
+        // Tab is hidden, but continue recording
+        if (status === "recording" && !isFullScreen && !warningShown) {
           console.log("Tab switching detected, but continuing to record");
           setWarningShown(true);
           toast.warning("Tab switching detected! Your recording is still in progress.");
         }
-      };
-      
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-      visibilityChangeHandledRef.current = true;
-      
-      return () => {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-        visibilityChangeHandledRef.current = false;
-      };
-    }
+      } else {
+        tabFocusedRef.current = true;
+        console.log("Tab is visible again, recording should continue");
+        // Do not reload the page, just ensure we're still recording
+        if (status === "recording" && mediaRecorderRef.current?.state !== "recording") {
+          console.log("MediaRecorder state after tab focus:", mediaRecorderRef.current?.state);
+          // If recording was interrupted, we might need to resume
+          if (mediaRecorderRef.current?.state === "paused") {
+            try {
+              mediaRecorderRef.current.resume();
+              console.log("Resumed recording after tab switch");
+              toast.info("Recording resumed after tab switch");
+            } catch (err) {
+              console.error("Error resuming recorder after tab switch:", err);
+            }
+          }
+        }
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [status, warningShown, isFullScreen]);
 
   // Automatic stop recording when time limit is reached
@@ -131,6 +149,8 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     }
     
     setStatus("preparing");
+    setRecordingError(null); // Clear any previous errors
+    
     try {
       // Reset recorded chunks and URL when starting a new recording
       recordedChunksRef.current = [];
@@ -258,6 +278,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       // Error handling for recorder
       recorder.onerror = (event) => {
         console.error("MediaRecorder error:", event);
+        setRecordingError("Recording encountered an error. Please try again.");
         toast.error("Recording error occurred. Please try again.");
       };
 
@@ -308,6 +329,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     } catch (error: any) {
       console.error("Error starting screen recording:", error);
       setStatus("idle");
+      setRecordingError(error.message || "Failed to start recording");
       toast.error(`Failed to start recording: ${error.message || "Please make sure you've granted the necessary permissions."}`);
     }
   }, [recordingUrl, status]);
@@ -341,6 +363,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       isStoppingRef.current = true;
       console.log("Stopping recording");
       setStatus("processing");
+      setRecordingError(null); // Clear any previous errors
       
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
@@ -391,6 +414,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
             
             if (recordedChunksRef.current.length === 0) {
               setStatus("idle");
+              setRecordingError("No recording data was captured");
               reject(new Error("No recording data was captured"));
             } else {
               processRecordedChunks(recordedChunksRef.current, recorder?.mimeType || 'video/webm')
@@ -400,6 +424,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
                 })
                 .catch(error => {
                   setStatus("idle");
+                  setRecordingError(error.message);
                   reject(error);
                 });
             }
@@ -417,6 +442,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
                 console.error("No recorded chunks available after stop event");
                 setStatus("idle");
                 isStoppingRef.current = false;
+                setRecordingError("No recording data was captured during the session");
                 reject(new Error("No recording data was captured during the session"));
                 return;
               }
@@ -430,6 +456,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
                 .catch(error => {
                   setStatus("idle");
                   isStoppingRef.current = false;
+                  setRecordingError(error.message);
                   reject(error);
                 });
             }, { once: true });
@@ -451,10 +478,12 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
                   })
                   .catch(error => {
                     setStatus("idle");
+                    setRecordingError(error.message);
                     reject(error);
                   });
               } else {
                 setStatus("idle");
+                setRecordingError("Failed to stop recording and no data was captured");
                 reject(new Error("Failed to stop recording and no data was captured"));
               }
             }
@@ -472,11 +501,13 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
                 })
                 .catch(error => {
                   setStatus("idle");
+                  setRecordingError(error.message);
                   reject(error);
                 });
             } else {
               console.error("No recorded chunks and recorder is inactive");
               setStatus("idle");
+              setRecordingError("No recording data was captured");
               reject(new Error("No recording data was captured"));
             }
           }
@@ -485,6 +516,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         console.error("Error in stopRecording flow:", err);
         setStatus("idle");
         isStoppingRef.current = false;
+        setRecordingError(err.message || "Error stopping recording");
         toast.error(`Error stopping recording: ${err.message}. Please try again.`);
         throw err;
       }
@@ -497,7 +529,9 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     console.log(`Processing ${chunks.length} recorded chunks`);
     
     if (!chunks.length) {
-      throw new Error("No recording data was captured");
+      const errorMsg = "No recording data was captured";
+      setRecordingError(errorMsg);
+      throw new Error(errorMsg);
     }
     
     console.log(`Creating blob from ${chunks.length} chunks`);
@@ -507,14 +541,18 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     const validChunks = chunks.filter(chunk => chunk.size > 0);
     
     if (validChunks.length === 0) {
-      throw new Error("All recording chunks were empty");
+      const errorMsg = "All recording chunks were empty";
+      setRecordingError(errorMsg);
+      throw new Error(errorMsg);
     }
     
     const blob = new Blob(validChunks, { type: mimeType });
     console.log("Created blob of size:", blob.size, "bytes");
     
     if (blob.size <= 0) {
-      throw new Error("Recording data was empty");
+      const errorMsg = "Recording data was empty";
+      setRecordingError(errorMsg);
+      throw new Error(errorMsg);
     }
     
     const url = URL.createObjectURL(blob);
@@ -569,6 +607,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     resumeRecording,
     stopRecording,
     playRecording,
-    recordedChunksCount
+    recordedChunksCount,
+    recordingError
   };
 };
