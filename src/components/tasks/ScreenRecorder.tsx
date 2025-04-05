@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -82,35 +81,33 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     recordedChunksCount
   } = useScreenRecording({ timeLimit });
 
-  // Switch to recording preview tab when recording starts
   useEffect(() => {
     if (status === 'recording' && activeTab !== 'recording') {
       setActiveTab('recording');
     }
     
-    // Reset error state when status changes
     if (status !== 'idle') {
       setRecordingError(null);
     }
 
-    // Auto-start recording when switching to recording tab
     if (activeTab === 'recording' && status === 'idle' && !isStartingAutomatically) {
       console.log("Auto-starting recording from tab change");
       setIsStartingAutomatically(true);
-      startRecording().finally(() => {
+      startRecording().catch(err => {
+        console.error("Error auto-starting recording:", err);
+      }).finally(() => {
         setIsStartingAutomatically(false);
       });
     }
   }, [status, activeTab]);
 
-  // Check if the user has already applied to this job
   useEffect(() => {
-    const checkExistingApplication = async () => {
-      if (!jobId || !user) {
-        setIsCheckingApplication(false);
-        return;
-      }
+    if (!jobId || !user) {
+      setIsCheckingApplication(false);
+      return;
+    }
 
+    const checkExistingApplication = async () => {
       try {
         const { data, error } = await supabase
           .from("applications")
@@ -121,11 +118,9 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
 
         if (error) throw error;
         
-        // If there's already an application, set the flag
         if (data) {
           setHasAlreadyApplied(true);
           if (data.recording_url) {
-            // If there's a recording URL, play it
             if (videoRef.current) {
               videoRef.current.src = data.recording_url;
             }
@@ -142,11 +137,9 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   }, [jobId, user, videoRef]);
 
   useEffect(() => {
-    // If we have an existing recording URL, prepare the video player
     if (existingRecordingUrl && videoRef.current) {
       videoRef.current.src = existingRecordingUrl;
       
-      // Add error handling for video loading
       const handleVideoError = () => {
         console.error("Error loading video from URL:", existingRecordingUrl);
         setVideoPlaybackError("Error loading video. The recording might be unavailable.");
@@ -162,47 +155,55 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     }
   }, [existingRecordingUrl, videoRef]);
 
-  // Function to handle tab changes
   const handleTabChange = (value: string) => {
+    if (value === 'instructions' && (status === 'recording' || status === 'paused')) {
+      const confirmSwitch = window.confirm("Switching tabs during recording may cause issues. Do you want to stop recording first?");
+      if (confirmSwitch) {
+        stopRecording()
+          .then(() => setActiveTab(value))
+          .catch(err => {
+            console.error("Error stopping recording during tab switch:", err);
+            toast.error("Failed to stop recording. Please try the stop button.");
+          });
+      }
+      return;
+    }
+    
     setActiveTab(value);
 
-    // Auto-start recording when switching to recording tab
     if (value === 'recording' && status === 'idle' && !isStartingAutomatically) {
       console.log("Auto-starting recording from tab change");
       setIsStartingAutomatically(true);
-      startRecording().finally(() => {
+      startRecording().catch(err => {
+        console.error("Error auto-starting recording:", err);
+      }).finally(() => {
         setIsStartingAutomatically(false);
       });
     }
   };
 
   const handleSubmitRecording = async () => {
-    // Check if we have valid recording data
     if (!recordingBlob || recordedChunks.length === 0) {
       console.error("No recording data available for submission");
       console.log("Blob exists:", !!recordingBlob);
       console.log("Recorded chunks:", recordedChunks.length);
       
       if (status === "recording" || status === "paused") {
-        // Try stopping the recording first
         toast.info("Finalizing recording before submission...");
         try {
           await stopRecording();
-          // A small delay to allow processing
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (e) {
           console.error("Error stopping recording:", e);
         }
       }
       
-      // Check again after stopping
       if (!recordingBlob || recordedChunks.length === 0) {
         setShowNoDataDialog(true);
         return;
       }
     }
     
-    // Check if recording is too small (likely empty)
     if (recordingBlob && recordingBlob.size < 1000) {
       setRecordingError("The recording appears to be empty or invalid. Please try again.");
       return;
@@ -216,11 +217,9 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     setIsSubmitting(true);
     
     try {
-      // Upload to Supabase Storage if we have a user
       let uploadedUrl = null;
       
       if (user && recordingBlob) {
-        // Create a filename with user ID and timestamp
         const fileName = `recording_${user.id}_${Date.now()}.webm`;
         
         console.log("Uploading recording to Supabase Storage");
@@ -228,10 +227,8 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         console.log("File name:", fileName);
         console.log("File size:", recordingBlob.size, "bytes");
         
-        // Add delay before upload to ensure blob is properly formed
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Upload to 'recordings' bucket
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('recordings')
           .upload(fileName, recordingBlob, {
@@ -246,7 +243,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         
         console.log("Upload successful:", uploadData);
         
-        // Get public URL
         const { data: publicUrlData } = await supabase.storage
           .from('recordings')
           .getPublicUrl(fileName);
@@ -263,7 +259,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         }
       }
       
-      // Call the onSubmit function with the recording blob and URL
       if (recordingBlob) {
         onSubmit(recordingBlob, uploadedUrl);
         toast.success("Recording submitted for review");
@@ -282,7 +277,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   const retryRecording = () => {
     setShowNoDataDialog(false);
     setRecordingError(null);
-    // Reset state and try recording again
     startRecording();
   };
 
@@ -396,7 +390,6 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         />
       </CardFooter>
 
-      {/* No data dialog */}
       <AlertDialog open={showNoDataDialog} onOpenChange={setShowNoDataDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

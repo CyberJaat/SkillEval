@@ -9,7 +9,7 @@ interface RecordingControlsProps {
   onStart: () => Promise<void>;
   onPause: () => void;
   onResume: () => void;
-  onStop: () => void;
+  onStop: () => Promise<void>; // Changed to Promise<void> for proper async handling
   onSubmit: () => void;
 }
 
@@ -22,6 +22,20 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   onStop,
   onSubmit
 }) => {
+  const [isStoppingRecording, setIsStoppingRecording] = React.useState(false);
+
+  // Handle stop recording with loading state
+  const handleStopRecording = async () => {
+    if (isStoppingRecording) return;
+    
+    setIsStoppingRecording(true);
+    try {
+      await onStop();
+    } finally {
+      setIsStoppingRecording(false);
+    }
+  };
+
   switch (status) {
     case "idle":
       return (
@@ -41,8 +55,17 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
           <Button variant="outline" onClick={onPause}>
             <Pause className="mr-2 h-4 w-4" /> Pause
           </Button>
-          <Button variant="destructive" onClick={onStop}>
-            <Square className="mr-2 h-4 w-4" /> Stop Recording
+          <Button 
+            variant="destructive" 
+            onClick={handleStopRecording} 
+            disabled={isStoppingRecording}
+          >
+            {isStoppingRecording ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Square className="mr-2 h-4 w-4" />
+            )}
+            {isStoppingRecording ? "Stopping..." : "Stop Recording"}
           </Button>
         </div>
       );
@@ -52,8 +75,17 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
           <Button variant="outline" onClick={onResume}>
             <Play className="mr-2 h-4 w-4" /> Resume
           </Button>
-          <Button variant="destructive" onClick={onStop}>
-            <Square className="mr-2 h-4 w-4" /> Stop Recording
+          <Button 
+            variant="destructive" 
+            onClick={handleStopRecording} 
+            disabled={isStoppingRecording}
+          >
+            {isStoppingRecording ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Square className="mr-2 h-4 w-4" />
+            )}
+            {isStoppingRecording ? "Stopping..." : "Stop Recording"}
           </Button>
         </div>
       );

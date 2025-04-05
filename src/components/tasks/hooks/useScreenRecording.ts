@@ -22,12 +22,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const dataCheckerRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isStoppingRef = useRef<boolean>(false);
 
   // Cleanup effect
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
@@ -49,7 +51,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         }
       }
     };
-  }, [stream, recordingUrl]);
+  }, [recordingUrl]);
 
   // Tab visibility warning
   useEffect(() => {
@@ -91,9 +93,9 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   }, [status]);
 
   const startRecording = useCallback(async () => {
-    // Prevent multiple start attempts
-    if (status !== "idle") {
-      console.log("Recording already in progress, status:", status);
+    // Prevent multiple start attempts or during stopping
+    if (status !== "idle" || isStoppingRef.current) {
+      console.log("Recording already in progress or stopping, status:", status);
       return;
     }
     
@@ -165,6 +167,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       ]);
 
       setStream(combinedStream);
+      streamRef.current = combinedStream;
       console.log("Combined stream created with tracks:", combinedStream.getTracks().length);
       console.log("Video tracks:", combinedStream.getVideoTracks().length);
       console.log("Audio tracks:", combinedStream.getAudioTracks().length);
@@ -232,18 +235,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       mediaRecorderRef.current = recorder;
       
       // Start capturing with a shorter timeslice to ensure we get data frequently
-      recorder.start(30); // Capture data every 30ms for more reliable data collection
-      console.log("MediaRecorder started with timeslice of 30ms");
+      recorder.start(1000); // Capture data every 1 second for more reliable data collection
+      console.log("MediaRecorder started with timeslice of 1000ms");
 
       // Set up a data checker interval to monitor if we're getting data
       dataCheckerRef.current = window.setInterval(() => {
         if (recorder.state === 'recording') {
-          if (recordedChunksRef.current.length === 0) {
-            console.log("No data received yet, requesting data explicitly");
-            recorder.requestData(); // Force the recorder to emit data
-          } else {
-            console.log("Data check: chunks collected:", recordedChunksRef.current.length);
-          }
+          console.log("Data check: chunks collected:", recordedChunksRef.current.length);
+          recorder.requestData(); // Force the recorder to emit data every interval
         }
         
         // Periodically check if video stream is still active
@@ -302,7 +301,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   }, [mediaRecorder, status]);
 
   const stopRecording = useCallback(async () => {
+    // Prevent concurrent stopping attempts
+    if (isStoppingRef.current) {
+      console.log("Already stopping recording, ignoring duplicate request");
+      return Promise.resolve();
+    }
+
     if ((mediaRecorder || mediaRecorderRef.current) && (status === "recording" || status === "paused")) {
+      isStoppingRef.current = true;
       console.log("Stopping recording");
       setStatus("processing");
       
@@ -325,7 +331,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
             recorder.requestData();
             
             // Small delay to allow data to be processed
-            await new Promise(resolve => setTimeout(resolve, 250));
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
         } catch (e) {
           console.error("Error requesting final data:", e);
@@ -333,11 +339,12 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       }
       
       // Stop all tracks
-      if (stream) {
-        stream.getTracks().forEach(track => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
           console.log("Stopping track:", track.kind, track.label);
           track.stop();
         });
+        streamRef.current = null;
       }
       
       const recorder = mediaRecorder || mediaRecorderRef.current;
@@ -350,6 +357,8 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
           // Safety timeout
           const timeoutId = setTimeout(() => {
             console.log("Recording stop timeout triggered");
+            isStoppingRef.current = false;
+            
             if (recordedChunksRef.current.length === 0) {
               setStatus("idle");
               reject(new Error("No recording data was captured"));
@@ -377,6 +386,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
               if (recordedChunksRef.current.length === 0) {
                 console.error("No recorded chunks available after stop event");
                 setStatus("idle");
+                isStoppingRef.current = false;
                 reject(new Error("No recording data was captured during the session"));
                 return;
               }
@@ -384,10 +394,12 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
               processRecordedChunks(recordedChunksRef.current, recorder.mimeType || 'video/webm')
                 .then(() => {
                   setStatus("completed");
+                  isStoppingRef.current = false;
                   resolve();
                 })
                 .catch(error => {
                   setStatus("idle");
+                  isStoppingRef.current = false;
                   reject(error);
                 });
             }, { once: true });
@@ -398,6 +410,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
             } catch (e) {
               console.error("Error stopping recorder:", e);
               clearTimeout(timeoutId);
+              isStoppingRef.current = false;
               
               // Try to process chunks anyway if we have them
               if (recordedChunksRef.current.length > 0) {
@@ -418,6 +431,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
           } else {
             clearTimeout(timeoutId);
             console.log("MediaRecorder already inactive, processing chunks directly");
+            isStoppingRef.current = false;
             
             // Handle the case when we already have chunks but recorder is inactive
             if (recordedChunksRef.current.length > 0) {
@@ -440,13 +454,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       } catch (err: any) {
         console.error("Error in stopRecording flow:", err);
         setStatus("idle");
+        isStoppingRef.current = false;
         toast.error(`Error stopping recording: ${err.message}. Please try again.`);
         throw err;
       }
     } else {
       return Promise.resolve();
     }
-  }, [mediaRecorder, status, stream]);
+  }, [mediaRecorder, status]);
 
   // Helper function to process recorded chunks
   const processRecordedChunks = async (chunks: Blob[], mimeType: string): Promise<Blob> => {
