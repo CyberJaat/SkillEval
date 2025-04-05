@@ -247,9 +247,14 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         }
         
         // Periodically check if video stream is still active
-        if (combinedStream.getVideoTracks()[0] && !combinedStream.getVideoTracks()[0].active) {
-          console.warn("Video track is no longer active, stopping recording");
-          stopRecording();
+        const videoTracks = combinedStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          const track = videoTracks[0];
+          // Replace the active check with readyState check
+          if (track.readyState === 'ended') {
+            console.warn("Video track is no longer active, stopping recording");
+            stopRecording();
+          }
         }
       }, 1000) as unknown as number;
       
