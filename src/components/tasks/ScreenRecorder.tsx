@@ -62,6 +62,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   const [activeTab, setActiveTab] = useState("instructions");
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [showNoDataDialog, setShowNoDataDialog] = useState(false);
+  const [isStartingAutomatically, setIsStartingAutomatically] = useState(false);
   
   const {
     status,
@@ -77,7 +78,8 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     pauseRecording,
     resumeRecording,
     stopRecording,
-    playRecording
+    playRecording,
+    recordedChunksCount
   } = useScreenRecording({ timeLimit });
 
   // Switch to recording preview tab when recording starts
@@ -90,7 +92,16 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
     if (status !== 'idle') {
       setRecordingError(null);
     }
-  }, [status]);
+
+    // Auto-start recording when switching to recording tab
+    if (activeTab === 'recording' && status === 'idle' && !isStartingAutomatically) {
+      console.log("Auto-starting recording from tab change");
+      setIsStartingAutomatically(true);
+      startRecording().finally(() => {
+        setIsStartingAutomatically(false);
+      });
+    }
+  }, [status, activeTab]);
 
   // Check if the user has already applied to this job
   useEffect(() => {
@@ -154,17 +165,45 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
   // Function to handle tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+
+    // Auto-start recording when switching to recording tab
+    if (value === 'recording' && status === 'idle' && !isStartingAutomatically) {
+      console.log("Auto-starting recording from tab change");
+      setIsStartingAutomatically(true);
+      startRecording().finally(() => {
+        setIsStartingAutomatically(false);
+      });
+    }
   };
 
   const handleSubmitRecording = async () => {
     // Check if we have valid recording data
-    if (!recordingBlob) {
-      setShowNoDataDialog(true);
-      return;
+    if (!recordingBlob || recordedChunks.length === 0) {
+      console.error("No recording data available for submission");
+      console.log("Blob exists:", !!recordingBlob);
+      console.log("Recorded chunks:", recordedChunks.length);
+      
+      if (status === "recording" || status === "paused") {
+        // Try stopping the recording first
+        toast.info("Finalizing recording before submission...");
+        try {
+          await stopRecording();
+          // A small delay to allow processing
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (e) {
+          console.error("Error stopping recording:", e);
+        }
+      }
+      
+      // Check again after stopping
+      if (!recordingBlob || recordedChunks.length === 0) {
+        setShowNoDataDialog(true);
+        return;
+      }
     }
     
     // Check if recording is too small (likely empty)
-    if (recordingBlob.size < 1000) {
+    if (recordingBlob && recordingBlob.size < 1000) {
       setRecordingError("The recording appears to be empty or invalid. Please try again.");
       return;
     }
@@ -180,7 +219,7 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
       // Upload to Supabase Storage if we have a user
       let uploadedUrl = null;
       
-      if (user) {
+      if (user && recordingBlob) {
         // Create a filename with user ID and timestamp
         const fileName = `recording_${user.id}_${Date.now()}.webm`;
         
@@ -215,13 +254,22 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
         uploadedUrl = publicUrlData.publicUrl;
         console.log("Public URL:", uploadedUrl);
       } else {
-        console.error("No user is authenticated, cannot upload recording");
-        throw new Error("You must be logged in to submit a recording");
+        console.error("No user is authenticated or no recording blob available");
+        if (!user) {
+          throw new Error("You must be logged in to submit a recording");
+        }
+        if (!recordingBlob) {
+          throw new Error("Recording failed to capture any data");
+        }
       }
       
       // Call the onSubmit function with the recording blob and URL
-      onSubmit(recordingBlob, uploadedUrl);
-      toast.success("Recording submitted for review");
+      if (recordingBlob) {
+        onSubmit(recordingBlob, uploadedUrl);
+        toast.success("Recording submitted for review");
+      } else {
+        throw new Error("No recording data available");
+      }
     } catch (error: any) {
       console.error("Error uploading recording:", error);
       toast.error(`Error uploading recording: ${error.message}`);
@@ -332,7 +380,8 @@ const ScreenRecorder: React.FC<ScreenRecorderProps> = ({
           isFullScreen={isFullScreen} 
           warningShown={warningShown} 
           status={status}
-          recordingError={recordingError} 
+          recordingError={recordingError}
+          recordedChunksCount={recordedChunksCount}
         />
       </CardContent>
       <CardFooter className="flex justify-center">

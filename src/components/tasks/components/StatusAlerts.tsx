@@ -8,13 +8,15 @@ interface StatusAlertsProps {
   warningShown: boolean;
   status: "idle" | "preparing" | "recording" | "paused" | "processing" | "completed";
   recordingError?: string | null;
+  recordedChunksCount?: number;
 }
 
 const StatusAlerts: React.FC<StatusAlertsProps> = ({ 
   isFullScreen, 
   warningShown, 
   status,
-  recordingError
+  recordingError,
+  recordedChunksCount = 0
 }) => {
   // Show screen sharing error if available
   if (recordingError) {
@@ -48,6 +50,20 @@ const StatusAlerts: React.FC<StatusAlertsProps> = ({
         <AlertTitle>Processing Recording</AlertTitle>
         <AlertDescription>
           Please wait while we process your recording. This may take a moment.
+          {recordedChunksCount > 0 && ` (${recordedChunksCount} chunks captured)`}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Show recording indicator when recording
+  if (status === "recording") {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4 text-green-500" />
+        <AlertTitle>Recording Active</AlertTitle>
+        <AlertDescription>
+          Your screen is being recorded. {recordedChunksCount > 0 ? `${recordedChunksCount} chunks captured so far.` : ""}
         </AlertDescription>
       </Alert>
     );
