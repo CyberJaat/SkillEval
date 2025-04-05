@@ -1,7 +1,7 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Video, Pause, Play, Square, CheckCircle2, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface RecordingControlsProps {
   status: "idle" | "preparing" | "recording" | "paused" | "processing" | "completed";
@@ -9,7 +9,7 @@ interface RecordingControlsProps {
   onStart: () => Promise<void>;
   onPause: () => void;
   onResume: () => void;
-  onStop: () => Promise<void>; // Changed to Promise<void> for proper async handling
+  onStop: () => Promise<void>;
   onSubmit: () => void;
 }
 
@@ -23,6 +23,7 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   onSubmit
 }) => {
   const [isStoppingRecording, setIsStoppingRecording] = React.useState(false);
+  const { toast } = useToast();
 
   // Handle stop recording with loading state
   const handleStopRecording = async () => {
@@ -31,6 +32,17 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
     setIsStoppingRecording(true);
     try {
       await onStop();
+      toast({
+        title: "Recording stopped",
+        description: "Your recording has been processed successfully."
+      });
+    } catch (err) {
+      console.error("Error stopping recording:", err);
+      toast({
+        title: "Recording error",
+        description: "Failed to stop recording. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsStoppingRecording(false);
     }

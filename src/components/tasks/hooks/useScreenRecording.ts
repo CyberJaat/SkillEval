@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +23,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const dataCheckerRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isStoppingRef = useRef<boolean>(false);
+  const visibilityChangeHandledRef = useRef<boolean>(false);
 
   // Cleanup effect
   useEffect(() => {
@@ -53,19 +53,27 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     };
   }, [recordingUrl]);
 
-  // Tab visibility warning
+  // Tab visibility warning with persistent recording
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && status === "recording" && !isFullScreen && !warningShown) {
-        toast.warning("Tab switching detected! Your recording may be invalidated.");
-        setWarningShown(true);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
+    // Only set up visibility handler if not already done
+    if (!visibilityChangeHandledRef.current) {
+      const handleVisibilityChange = () => {
+        if (document.hidden && status === "recording" && !isFullScreen && !warningShown) {
+          // Just show a warning without stopping the recording
+          console.log("Tab switching detected, but continuing to record");
+          setWarningShown(true);
+          toast.warning("Tab switching detected! Your recording is still in progress.");
+        }
+      };
+      
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      visibilityChangeHandledRef.current = true;
+      
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        visibilityChangeHandledRef.current = false;
+      };
+    }
   }, [status, warningShown, isFullScreen]);
 
   // Automatic stop recording when time limit is reached
@@ -249,7 +257,6 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
         const videoTracks = combinedStream.getVideoTracks();
         if (videoTracks.length > 0) {
           const track = videoTracks[0];
-          // Replace the active check with readyState check
           if (track.readyState === 'ended') {
             console.warn("Video track is no longer active, stopping recording");
             stopRecording();
@@ -463,7 +470,6 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     }
   }, [mediaRecorder, status]);
 
-  // Helper function to process recorded chunks
   const processRecordedChunks = async (chunks: Blob[], mimeType: string): Promise<Blob> => {
     console.log(`Processing ${chunks.length} recorded chunks`);
     
@@ -512,7 +518,6 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
     return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Play the recording in the video element if available
   const playRecording = useCallback(() => {
     if (videoRef.current && recordingUrl) {
       console.log("Playing recording from URL:", recordingUrl);
