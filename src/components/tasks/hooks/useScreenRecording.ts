@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +25,7 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
   const streamRef = useRef<MediaStream | null>(null);
   const isStoppingRef = useRef<boolean>(false);
   const visibilityChangeHandledRef = useRef<boolean>(false);
+  const pageLoadEventSet = useRef<boolean>(false);
 
   // Cleanup effect
   useEffect(() => {
@@ -52,6 +54,27 @@ export const useScreenRecording = ({ timeLimit }: UseScreenRecordingProps) => {
       }
     };
   }, [recordingUrl]);
+
+  // Prevent page reload/unload during recording
+  useEffect(() => {
+    if (!pageLoadEventSet.current && (status === "recording" || status === "paused")) {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (status === "recording" || status === "paused") {
+          e.preventDefault();
+          e.returnValue = "You have an active recording. Are you sure you want to leave?";
+          return e.returnValue;
+        }
+      };
+
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      pageLoadEventSet.current = true;
+      
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        pageLoadEventSet.current = false;
+      };
+    }
+  }, [status]);
 
   // Tab visibility warning with persistent recording
   useEffect(() => {
