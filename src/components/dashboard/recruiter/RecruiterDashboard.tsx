@@ -47,15 +47,21 @@ const RecruiterDashboard = () => {
       if (appError) throw appError;
       
       // Count applications with AI reviews
+      // First get application IDs with reviews
+      const { data: aiReviews, error: aiError } = await supabase
+        .from('ai_reviews')
+        .select('application_id');
+      
+      if (aiError) throw aiError;
+      
+      // Then count applications that match both criteria
+      const reviewedApplicationIds = aiReviews ? aiReviews.map(review => review.application_id) : [];
+      
       const { count: reviewCount, error: reviewError } = await supabase
         .from('applications')
         .select('id', { count: 'exact', head: true })
         .in('job_id', jobIds)
-        .in('id', (query) => {
-          return query
-            .from('ai_reviews')
-            .select('application_id');
-        });
+        .in('id', reviewedApplicationIds);
       
       if (reviewError) throw reviewError;
       
