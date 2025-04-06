@@ -73,6 +73,7 @@ const CustomApplicantsTable = () => {
         
         if (!jobs || jobs.length === 0) {
           setApplicants([]);
+          setLoading(false);
           return;
         }
 
@@ -87,7 +88,8 @@ const CustomApplicantsTable = () => {
             created_at,
             job_id,
             jobs(title),
-            student_id
+            student_id,
+            recording_url
           `)
           .in("job_id", jobIds)
           .order("created_at", { ascending: false })
@@ -97,6 +99,7 @@ const CustomApplicantsTable = () => {
         
         if (!applications || applications.length === 0) {
           setApplicants([]);
+          setLoading(false);
           return;
         }
 
@@ -120,6 +123,7 @@ const CustomApplicantsTable = () => {
                 status: application.status,
                 score: null,
                 avatar: "",
+                hasRecording: !!application.recording_url
               };
             }
 
@@ -144,6 +148,7 @@ const CustomApplicantsTable = () => {
               status: application.status,
               score,
               avatar: profile.avatar_url || "",
+              hasRecording: !!application.recording_url
             };
           })
         );
@@ -232,7 +237,7 @@ const CustomApplicantsTable = () => {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                <Button asChild size="sm" variant="outline">
+                <Button asChild size="sm" variant={applicant.hasRecording ? "default" : "outline"}>
                   <Link to={`/recruiter/applications/${applicant.id}`}>
                     <PlayCircle className="mr-2 h-4 w-4" />
                     View Application

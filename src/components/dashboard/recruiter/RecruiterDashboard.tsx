@@ -1,158 +1,120 @@
 
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Briefcase, Users, Clock, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
-import JobListingTable from "./JobListingTable";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import CustomApplicantsTable from "./CustomApplicantsTable";
+import JobListingTable from "./JobListingTable";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 const RecruiterDashboard = () => {
-  const { user } = useAuth();
-  const [activeJobCount, setActiveJobCount] = useState(0);
-  const [applicantsCount, setApplicantsCount] = useState(0);
-  const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("applications");
+  
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['recruiter-stats'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) return;
-
-      try {
-        setLoading(true);
+      // Get count of active jobs
+      const { count: jobCount, error: jobError } = await supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('recruiter_id', user.id)
+        .eq('is_active', true);
         
-        // Fetch active jobs count
-        const { count: jobCount, error: jobError } = await supabase
-          .from("jobs")
-          .select("*", { count: "exact" })
-          .eq("recruiter_id", user.id)
-          .eq("is_active", true);
-
-        if (jobError) throw jobError;
+      if (jobError) throw jobError;
+      
+      // Get count of applications
+      const { count: applicationCount, error: appError } = await supabase
+        .from('applications')
+        .select('applications.id', { count: 'exact', head: true })
+        .eq('jobs.recruiter_id', user.id)
+        .join('jobs', { 'applications.job_id': 'jobs.id' });
         
-        if (jobCount !== null) {
-          setActiveJobCount(jobCount);
-        }
-
-        // Fetch all applications for recruiter's jobs
-        const { data: recruitersJobs, error: jobsError } = await supabase
-          .from("jobs")
-          .select("id")
-          .eq("recruiter_id", user.id);
-
-        if (jobsError) throw jobsError;
+      if (appError) throw appError;
+      
+      // Get count of applications with AI reviews
+      const { count: reviewCount, error: reviewError } = await supabase
+        .from('applications')
+        .select('applications.id, ai_reviews!inner(id)', { count: 'exact', head: true })
+        .eq('jobs.recruiter_id', user.id)
+        .join('jobs', { 'applications.job_id': 'jobs.id' })
+        .join('ai_reviews', { 'applications.id': 'ai_reviews.application_id' });
         
-        if (recruitersJobs && recruitersJobs.length > 0) {
-          const jobIds = recruitersJobs.map(job => job.id);
-          
-          // Get total applicants count
-          const { count: appCount, error: appError } = await supabase
-            .from("applications")
-            .select("*", { count: "exact" })
-            .in("job_id", jobIds);
-
-          if (appError) throw appError;
-          
-          if (appCount !== null) {
-            setApplicantsCount(appCount);
-          }
-          
-          // Get pending reviews count
-          const { count: pendingCount, error: pendingError } = await supabase
-            .from("applications")
-            .select("*", { count: "exact" })
-            .in("job_id", jobIds)
-            .eq("status", "submitted");
-
-          if (pendingError) throw pendingError;
-          
-          if (pendingCount !== null) {
-            setPendingReviewsCount(pendingCount);
-          }
-        }
-      } catch (error: any) {
-        console.error("Error fetching dashboard data:", error);
-        toast.error("Error loading dashboard data");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [user]);
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+      if (reviewError) throw reviewError;
+      
+      return {
+        activeJobs: jobCount || 0,
+        totalApplications: applicationCount || 0,
+        reviewedApplications: reviewCount || 0
+      };
+    },
+    refetchOnWindowFocus: false
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Recruiter Dashboard</h1>
-        <Button asChild>
-          <Link to="/recruiter/jobs/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Post New Job
-          </Link>
-        </Button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="glass-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Active Jobs</CardTitle>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <Briefcase className="h-8 w-8 text-accent" />
-              <span className="text-3xl font-bold">{activeJobCount}</span>
-            </div>
+            {loadingStats ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.activeJobs || 0}</div>
+            )}
           </CardContent>
         </Card>
-        
-        <Card className="glass-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Total Applicants</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <Users className="h-8 w-8 text-accent" />
-              <span className="text-3xl font-bold">{applicantsCount}</span>
-            </div>
+            {loadingStats ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
+            )}
           </CardContent>
         </Card>
-        
-        <Card className="glass-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Pending Reviews</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">AI Reviewed Applications</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <Clock className="h-8 w-8 text-accent" />
-              <span className="text-3xl font-bold">{pendingReviewsCount}</span>
-            </div>
+            {loadingStats ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.reviewedApplications || 0}</div>
+            )}
           </CardContent>
         </Card>
       </div>
-      
-      <Tabs defaultValue="jobs" className="w-full">
-        <TabsList className="w-full grid grid-cols-2">
-          <TabsTrigger value="jobs">My Job Listings</TabsTrigger>
-          <TabsTrigger value="applicants">Recent Applicants</TabsTrigger>
+
+      <Tabs 
+        defaultValue={activeTab} 
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
+        <TabsList>
+          <TabsTrigger value="applications">Applications</TabsTrigger>
+          <TabsTrigger value="jobs">Job Listings</TabsTrigger>
         </TabsList>
-        <TabsContent value="jobs">
-          <JobListingTable />
-        </TabsContent>
-        <TabsContent value="applicants">
+        <TabsContent value="applications" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Recent Applications</h2>
+          </div>
           <CustomApplicantsTable />
+        </TabsContent>
+        <TabsContent value="jobs" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Active Job Listings</h2>
+          </div>
+          <JobListingTable />
         </TabsContent>
       </Tabs>
     </div>

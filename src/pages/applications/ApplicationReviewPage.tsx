@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,13 +45,11 @@ const ApplicationReviewPage = () => {
   const [isPlaybackOpen, setIsPlaybackOpen] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Fetch application data
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
 
       try {
-        // Fetch application
         const { data: applicationData, error: applicationError } = await supabase
           .from('applications')
           .select('*')
@@ -62,7 +59,6 @@ const ApplicationReviewPage = () => {
         if (applicationError) throw applicationError;
         setApplication(applicationData);
 
-        // Fetch student profile
         if (applicationData?.student_id) {
           const { data: studentData, error: studentError } = await supabase
             .from('profiles')
@@ -74,7 +70,6 @@ const ApplicationReviewPage = () => {
           setStudent(studentData);
         }
 
-        // Fetch job details
         if (applicationData?.job_id) {
           const { data: jobData, error: jobError } = await supabase
             .from('jobs')
@@ -86,7 +81,6 @@ const ApplicationReviewPage = () => {
           setJob(jobData);
         }
 
-        // Fetch AI review
         const { data: aiReviewData, error: aiReviewError } = await supabase
           .from('ai_reviews')
           .select('*')
@@ -97,7 +91,6 @@ const ApplicationReviewPage = () => {
           setAIReview(aiReviewData);
         }
 
-        // Fetch existing feedback
         const { data: feedbackData, error: feedbackError } = await supabase
           .from('recruiter_feedback')
           .select('*')
@@ -125,7 +118,6 @@ const ApplicationReviewPage = () => {
 
     try {
       if (existingFeedback) {
-        // Update existing feedback
         const { error } = await supabase
           .from('recruiter_feedback')
           .update({
@@ -136,7 +128,6 @@ const ApplicationReviewPage = () => {
 
         if (error) throw error;
       } else {
-        // Create new feedback
         const { error } = await supabase
           .from('recruiter_feedback')
           .insert({
@@ -149,7 +140,6 @@ const ApplicationReviewPage = () => {
 
       toast.success("Feedback saved successfully");
 
-      // Refresh feedback data
       const { data: updatedFeedback, error: fetchError } = await supabase
         .from('recruiter_feedback')
         .select('*')
@@ -201,56 +191,14 @@ const ApplicationReviewPage = () => {
     
     setIsRequestingAIReview(true);
     try {
-      // Check if an AI review already exists
-      if (aiReview) {
-        const confirmOverwrite = window.confirm("An AI review already exists. Do you want to request a new one?");
-        if (!confirmOverwrite) {
-          setIsRequestingAIReview(false);
-          return;
-        }
-      }
+      const { error } = await supabase.functions.invoke("generate-ai-review", {
+        body: { applicationId: id },
+      });
       
-      // Mock AI review generation (in a real app, this would call an AI service)
-      // This is a simplified example - in a production app you'd call an API or edge function
-      const taskType = job.task_type?.toLowerCase() || 'coding';
-      
-      const mockAIReview = {
-        application_id: id,
-        score: 3.8,
-        summary: "This submission demonstrates solid foundational skills with some areas for improvement.",
-        strengths: [
-          "Clear approach to problem-solving",
-          "Good code organization",
-          "Effective use of available APIs"
-        ],
-        areas_to_improve: [
-          "Could improve error handling",
-          "Some edge cases not addressed",
-          "Documentation could be more comprehensive"
-        ],
-        code_quality: JSON.stringify({
-          correctness: 4.0,
-          efficiency: 3.5,
-          best_practices: 3.9
-        }),
-        overall_recommendation: "Consider this candidate for the next round. They have demonstrated sufficient skills for the role but would benefit from mentoring in certain areas."
-      };
-      
-      // Insert or update the AI review in the database
-      const { data, error } = await supabase
-        .from('ai_reviews')
-        .upsert({
-          ...mockAIReview,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'application_id'
-        });
-        
       if (error) throw error;
       
       toast.success("AI review generated successfully");
       
-      // Fetch the updated AI review
       const { data: updatedAIReview, error: fetchError } = await supabase
         .from('ai_reviews')
         .select('*')
@@ -273,7 +221,6 @@ const ApplicationReviewPage = () => {
     
     setSubmitting(true);
     try {
-      // Generate feedback based on AI review
       const aiGeneratedFeedback = `Based on our review of your submission:
 
 Strengths:
@@ -289,10 +236,8 @@ Your score: ${aiReview.score}/5
 
 Thank you for your application.`;
       
-      // Update the feedback state
       setFeedback(aiGeneratedFeedback);
       
-      // Save to database
       if (existingFeedback) {
         const { error } = await supabase
           .from('recruiter_feedback')
@@ -316,7 +261,6 @@ Thank you for your application.`;
       
       toast.success("AI-generated feedback sent to applicant");
       
-      // Refresh feedback data
       const { data: updatedFeedback, error: fetchError } = await supabase
         .from('recruiter_feedback')
         .select('*')
@@ -361,7 +305,6 @@ Thank you for your application.`;
     );
   }
 
-  // Process code quality metrics from aiReview if it exists
   let codeQualityMetrics: CodeQualityMetrics = {
     correctness: 0,
     efficiency: 0,
@@ -372,11 +315,9 @@ Thank you for your application.`;
 
   if (aiReview?.code_quality) {
     try {
-      // Try to parse if it's a string, or use directly if it's already an object
       if (typeof aiReview.code_quality === 'string') {
         codeQualityMetrics = JSON.parse(aiReview.code_quality as string);
       } else if (typeof aiReview.code_quality === 'object') {
-        // Ensure required properties exist before assignment
         const codeQuality = aiReview.code_quality as Record<string, any>;
         codeQualityMetrics = {
           correctness: codeQuality.correctness || 0,
@@ -546,7 +487,6 @@ Thank you for your application.`;
         </TabsContent>
       </Tabs>
 
-      {/* Recording Playback Sheet */}
       <Sheet open={isPlaybackOpen} onOpenChange={setIsPlaybackOpen}>
         <SheetContent className="w-full md:max-w-[800px] sm:max-w-full">
           <SheetHeader>
