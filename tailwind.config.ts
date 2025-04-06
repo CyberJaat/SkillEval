@@ -58,6 +58,10 @@ export default {
           light: "#FFEB8A",
           dark: "#B8860B",
         },
+        skilleval: {
+          white: "#FFFFFF",
+          gold: "#E6B325",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

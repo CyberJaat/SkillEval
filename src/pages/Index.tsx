@@ -13,14 +13,14 @@ const Index = () => {
           <div className="flex flex-col items-center justify-center space-y-8 text-center">
             <div className="mb-4">
               <img 
-                src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
+                src="/lovable-uploads/5f81d38e-9aa7-4947-a3d0-e14bd3ae0510.png" 
                 alt="SkillEval Logo" 
                 className="h-24 md:h-32 mx-auto" 
               />
             </div>
             <div className="space-y-4 max-w-3xl">
               <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl/none">
-                <span className="text-gradient-gold">SkillEval</span>
+                <span className="text-gradient-skilleval">SkillEval</span>
                 <span className="block mt-1">Connecting Talent Through Task-Based Hiring</span>
               </h1>
               <p className="max-w-[800px] text-muted-foreground md:text-xl">
@@ -155,7 +155,7 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 md:py-24 bg-accent text-white">
+      <section className="py-16 md:py-24 skilleval-gradient text-white">
         <div className="container px-4 md:px-6">
           <div className="flex flex-col items-center justify-center space-y-8 text-center">
             <div className="space-y-3">
@@ -167,7 +167,7 @@ const Index = () => {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button asChild size="lg" variant="default" className="bg-white text-accent hover:bg-white/90">
+              <Button asChild size="lg" variant="default" className="bg-white text-purple-600 hover:bg-white/90">
                 <Link to="/register">
                   Create an Account
                 </Link>

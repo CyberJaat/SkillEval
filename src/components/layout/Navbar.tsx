@@ -60,11 +60,11 @@ const Navbar = () => {
         <div className="flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2">
             <img 
-              src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
+              src="/lovable-uploads/5f81d38e-9aa7-4947-a3d0-e14bd3ae0510.png" 
               alt="SkillEval Logo" 
               className="h-8 w-auto" 
             />
-            <span className="text-2xl font-bold text-gradient-gold">SkillEval</span>
+            <span className="text-2xl font-bold text-gradient-skilleval">SkillEval</span>
           </Link>
         </div>
         

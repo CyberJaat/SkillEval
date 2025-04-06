@@ -19,12 +19,12 @@ const AboutPage = () => {
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
             <img 
-              src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
+              src="/lovable-uploads/5f81d38e-9aa7-4947-a3d0-e14bd3ae0510.png" 
               alt="SkillEval Logo" 
               className="h-16 w-auto" 
             />
           </div>
-          <h1 className="text-4xl font-bold mb-4">About SkillEval</h1>
+          <h1 className="text-4xl font-bold mb-4">About <span className="text-gradient-skilleval">SkillEval</span></h1>
           <p className="text-xl text-muted-foreground">
             Revolutionizing recruitment through task-based skill verification
           </p>

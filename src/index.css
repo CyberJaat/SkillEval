@@ -59,6 +59,14 @@
   .text-gradient-gold {
     @apply bg-gradient-to-r from-gold-light via-gold to-gold-dark bg-clip-text text-transparent;
   }
+  
+  .text-gradient-skilleval {
+    @apply bg-gradient-to-r from-skilleval-white to-skilleval-white via-skilleval-white to-skilleval-gold bg-clip-text text-transparent;
+  }
+  
+  .skilleval-gradient {
+    @apply bg-gradient-to-r from-purple-600 via-pink-500 to-skilleval-gold;
+  }
 }
 
 .hero-pattern {
