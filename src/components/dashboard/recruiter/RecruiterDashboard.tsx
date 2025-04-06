@@ -26,23 +26,37 @@ const RecruiterDashboard = () => {
         
       if (jobError) throw jobError;
       
-      // Get count of applications
+      // Get count of applications through a different approach
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('recruiter_id', user.id);
+      
+      if (!jobs || jobs.length === 0) {
+        return { activeJobs: jobCount || 0, totalApplications: 0, reviewedApplications: 0 };
+      }
+      
+      const jobIds = jobs.map(job => job.id);
+      
+      // Count applications for these jobs
       const { count: applicationCount, error: appError } = await supabase
         .from('applications')
-        .select('applications.id', { count: 'exact', head: true })
-        .eq('jobs.recruiter_id', user.id)
-        .join('jobs', { 'applications.job_id': 'jobs.id' });
-        
+        .select('*', { count: 'exact', head: true })
+        .in('job_id', jobIds);
+      
       if (appError) throw appError;
       
-      // Get count of applications with AI reviews
+      // Count applications with AI reviews
       const { count: reviewCount, error: reviewError } = await supabase
         .from('applications')
-        .select('applications.id, ai_reviews!inner(id)', { count: 'exact', head: true })
-        .eq('jobs.recruiter_id', user.id)
-        .join('jobs', { 'applications.job_id': 'jobs.id' })
-        .join('ai_reviews', { 'applications.id': 'ai_reviews.application_id' });
-        
+        .select('id', { count: 'exact', head: true })
+        .in('job_id', jobIds)
+        .in('id', (query) => {
+          return query
+            .from('ai_reviews')
+            .select('application_id');
+        });
+      
       if (reviewError) throw reviewError;
       
       return {
