@@ -13,7 +13,7 @@ const Index = () => {
           <div className="flex flex-col items-center justify-center space-y-8 text-center">
             <div className="mb-4">
               <img 
-                src="/lovable-uploads/f0017b33-4fb6-456b-adfb-995bb4858cee.png" 
+                src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
                 alt="SkillEval Logo" 
                 className="h-24 md:h-32 mx-auto" 
               />

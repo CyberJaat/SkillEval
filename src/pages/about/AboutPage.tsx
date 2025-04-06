@@ -19,7 +19,7 @@ const AboutPage = () => {
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
             <img 
-              src="/lovable-uploads/2db31673-64e6-4622-9c8a-b02b71c7dbac.png" 
+              src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
               alt="SkillEval Logo" 
               className="h-16 w-auto" 
             />

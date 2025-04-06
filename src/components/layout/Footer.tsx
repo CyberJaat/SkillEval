@@ -10,7 +10,7 @@ const Footer = () => {
           <div className="col-span-1 md:col-span-2">
             <Link to="/" className="flex items-center gap-2">
               <img 
-                src="/lovable-uploads/2db31673-64e6-4622-9c8a-b02b71c7dbac.png" 
+                src="/lovable-uploads/46c6d02b-b263-4ff5-af61-ea438e33b3f0.png" 
                 alt="SkillEval Logo" 
                 className="h-8 w-auto" 
               />
