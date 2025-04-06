@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,12 +30,15 @@ interface CommunicationMetrics {
 
 const StudentApplicationPage = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [application, setApplication] = useState<ApplicationData | null>(null);
   const [recruiter, setRecruiter] = useState<ProfileData | null>(null);
   const [job, setJob] = useState<JobData | null>(null);
   const [aiReview, setAIReview] = useState<AIReviewData | null>(null);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [notFound, setNotFound] = useState<boolean>(false);
+  const [videoError, setVideoError] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -50,7 +53,16 @@ const StudentApplicationPage = () => {
           .eq('id', id)
           .single();
 
-        if (applicationError) throw applicationError;
+        if (applicationError) {
+          if (applicationError.code === 'PGRST116') {
+            console.error("Application not found:", applicationError);
+            setNotFound(true);
+          } else {
+            throw applicationError;
+          }
+          return;
+        }
+        
         setApplication(applicationData);
 
         // Fetch job details
@@ -61,19 +73,31 @@ const StudentApplicationPage = () => {
             .eq('id', applicationData.job_id)
             .single();
 
-          if (jobError) throw jobError;
-          setJob(jobData);
+          if (jobError) {
+            console.error("Job fetch error:", jobError);
+            if (jobError.code !== 'PGRST116') {
+              throw jobError;
+            }
+          } else {
+            setJob(jobData);
 
-          // Fetch recruiter profile
-          if (jobData?.recruiter_id) {
-            const { data: recruiterData, error: recruiterError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', jobData.recruiter_id)
-              .single();
+            // Fetch recruiter profile
+            if (jobData?.recruiter_id) {
+              const { data: recruiterData, error: recruiterError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', jobData.recruiter_id)
+                .single();
 
-            if (recruiterError) throw recruiterError;
-            setRecruiter(recruiterData);
+              if (recruiterError) {
+                console.error("Recruiter fetch error:", recruiterError);
+                if (recruiterError.code !== 'PGRST116') {
+                  throw recruiterError;
+                }
+              } else {
+                setRecruiter(recruiterData);
+              }
+            }
           }
         }
 
@@ -90,6 +114,8 @@ const StudentApplicationPage = () => {
 
           if (!aiReviewError) {
             setAIReview(aiReviewData);
+          } else if (aiReviewError.code !== 'PGRST116') {
+            console.error("AI review fetch error:", aiReviewError);
           }
         }
 
@@ -102,6 +128,8 @@ const StudentApplicationPage = () => {
 
         if (!feedbackError) {
           setFeedback(feedbackData);
+        } else if (feedbackError.code !== 'PGRST116') {
+          console.error("Feedback fetch error:", feedbackError);
         }
       } catch (error) {
         console.error("Error fetching application data:", error);
@@ -112,13 +140,14 @@ const StudentApplicationPage = () => {
     };
 
     fetchData();
-  }, [id]);
+  }, [id, navigate]);
 
   const playRecording = () => {
     if (videoRef.current && application?.recording_url) {
       videoRef.current.src = application.recording_url;
       videoRef.current.play().catch(err => {
         console.error("Error playing recording:", err);
+        setVideoError(true);
         toast.error("Error playing recording");
       });
     }
@@ -132,7 +161,7 @@ const StudentApplicationPage = () => {
     );
   }
 
-  if (!application || !job) {
+  if (notFound || !application || !job) {
     return (
       <div className="container py-10">
         <h1 className="text-2xl font-bold mb-4">Application not found</h1>

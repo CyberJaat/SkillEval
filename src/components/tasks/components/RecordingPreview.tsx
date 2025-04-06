@@ -19,11 +19,26 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
   isPlayback = false
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // If in playback mode and there's a recording URL, set it as the source
     if (isPlayback && recordingUrl && videoRef.current) {
       videoRef.current.src = recordingUrl;
+      
+      // Add error handler
+      const handleError = () => {
+        console.error("Video playback error:", videoRef.current?.error);
+        setError("Error loading video. The recording might be unavailable.");
+      };
+      
+      videoRef.current.onerror = handleError;
+      
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.onerror = null;
+        }
+      };
     }
   }, [isPlayback, recordingUrl, videoRef]);
 
@@ -47,6 +62,13 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
     };
   }, [videoRef]);
 
+  const handlePlayClick = () => {
+    if (onPlayRecording) {
+      setError(null);
+      onPlayRecording();
+    }
+  };
+
   return (
     <div className="aspect-video bg-black/20 rounded-md overflow-hidden relative">
       {status === "idle" && !isPlayback && (
@@ -55,7 +77,19 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
         </div>
       )}
       
-      {isPlayback && recordingUrl && status !== "recording" && status !== "preparing" ? (
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white">
+          <p className="text-destructive font-semibold mb-2">{error}</p>
+          <Button 
+            variant="outline" 
+            onClick={handlePlayClick}
+          >
+            Try Again
+          </Button>
+        </div>
+      )}
+      
+      {isPlayback && recordingUrl && status !== "recording" && status !== "preparing" && !error ? (
         <div className="relative">
           <video 
             ref={videoRef} 
@@ -67,7 +101,7 @@ const RecordingPreview: React.FC<RecordingPreviewProps> = ({
               <Button 
                 variant="outline" 
                 className="rounded-full p-3"
-                onClick={onPlayRecording}
+                onClick={handlePlayClick}
               >
                 <Play className="h-8 w-8" />
               </Button>

@@ -27,7 +27,7 @@ interface Applicant {
   status: string;
   score: number | null;
   avatar: string;
-  hasRecording: boolean;  // Added the missing property
+  hasRecording: boolean;
 }
 
 const getInitials = (name: string) => {

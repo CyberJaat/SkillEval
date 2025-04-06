@@ -43,6 +43,7 @@ const ApplicationReviewPage = () => {
   const [acceptingRejecting, setAcceptingRejecting] = useState<boolean>(false);
   const [isRequestingAIReview, setIsRequestingAIReview] = useState<boolean>(false);
   const [isPlaybackOpen, setIsPlaybackOpen] = useState<boolean>(false);
+  const [notFound, setNotFound] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -56,7 +57,16 @@ const ApplicationReviewPage = () => {
           .eq('id', id)
           .single();
 
-        if (applicationError) throw applicationError;
+        if (applicationError) {
+          if (applicationError.code === 'PGRST116') {
+            console.error("Application not found:", applicationError);
+            setNotFound(true);
+          } else {
+            throw applicationError;
+          }
+          return;
+        }
+        
         setApplication(applicationData);
 
         if (applicationData?.student_id) {
@@ -66,8 +76,14 @@ const ApplicationReviewPage = () => {
             .eq('id', applicationData.student_id)
             .single();
 
-          if (studentError) throw studentError;
-          setStudent(studentData);
+          if (studentError) {
+            console.error("Student fetch error:", studentError);
+            if (studentError.code !== 'PGRST116') {
+              throw studentError;
+            }
+          } else {
+            setStudent(studentData);
+          }
         }
 
         if (applicationData?.job_id) {
@@ -77,8 +93,14 @@ const ApplicationReviewPage = () => {
             .eq('id', applicationData.job_id)
             .single();
 
-          if (jobError) throw jobError;
-          setJob(jobData);
+          if (jobError) {
+            console.error("Job fetch error:", jobError);
+            if (jobError.code !== 'PGRST116') {
+              throw jobError;
+            }
+          } else {
+            setJob(jobData);
+          }
         }
 
         const { data: aiReviewData, error: aiReviewError } = await supabase
@@ -296,7 +318,7 @@ Thank you for your application.`;
     );
   }
 
-  if (!application || !student || !job) {
+  if (notFound || !application || !student || !job) {
     return (
       <div className="container py-10">
         <h1 className="text-2xl font-bold mb-4">Application not found</h1>
