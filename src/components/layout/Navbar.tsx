@@ -59,7 +59,12 @@ const Navbar = () => {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-gradient-gold">TaskBridge</span>
+            <img 
+              src="/lovable-uploads/2db31673-64e6-4622-9c8a-b02b71c7dbac.png" 
+              alt="SkillEval Logo" 
+              className="h-8 w-auto" 
+            />
+            <span className="text-2xl font-bold text-gradient-gold">SkillEval</span>
           </Link>
         </div>
         

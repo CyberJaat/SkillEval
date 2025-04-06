@@ -8,8 +8,13 @@ const Footer = () => {
       <div className="container">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
-            <Link to="/" className="text-xl font-bold text-gradient-gold">
-              TaskBridge
+            <Link to="/" className="flex items-center gap-2">
+              <img 
+                src="/lovable-uploads/2db31673-64e6-4622-9c8a-b02b71c7dbac.png" 
+                alt="SkillEval Logo" 
+                className="h-8 w-auto" 
+              />
+              <span className="text-xl font-bold text-gradient-gold">SkillEval</span>
             </Link>
             <p className="mt-2 text-sm text-foreground/70">
               Connecting talented students with recruiters through skill-based assessments.
@@ -55,7 +60,7 @@ const Footer = () => {
         </div>
         
         <div className="mt-8 pt-4 border-t border-border/40 text-center text-xs text-foreground/50">
-          &copy; {new Date().getFullYear()} TaskBridge. All rights reserved.
+          &copy; {new Date().getFullYear()} SkillEval. All rights reserved.
         </div>
       </div>
     </footer>

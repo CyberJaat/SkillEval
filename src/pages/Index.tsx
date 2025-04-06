@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -10,9 +11,16 @@ const Index = () => {
       <section className="py-16 md:py-24 hero-pattern">
         <div className="container px-4 md:px-6">
           <div className="flex flex-col items-center justify-center space-y-8 text-center">
+            <div className="mb-4">
+              <img 
+                src="/lovable-uploads/f0017b33-4fb6-456b-adfb-995bb4858cee.png" 
+                alt="SkillEval Logo" 
+                className="h-24 md:h-32 mx-auto" 
+              />
+            </div>
             <div className="space-y-4 max-w-3xl">
               <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl/none">
-                <span className="text-gradient-gold">TaskBridge</span>
+                <span className="text-gradient-gold">SkillEval</span>
                 <span className="block mt-1">Connecting Talent Through Task-Based Hiring</span>
               </h1>
               <p className="max-w-[800px] text-muted-foreground md:text-xl">
@@ -40,7 +48,7 @@ const Index = () => {
         <div className="container px-4 md:px-6">
           <div className="flex flex-col items-center justify-center space-y-8 text-center">
             <div className="space-y-2">
-              <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How TaskBridge Works</h2>
+              <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How SkillEval Works</h2>
               <p className="max-w-[700px] text-muted-foreground md:text-xl">
                 A transparent process that benefits both recruiters and students
               </p>
@@ -119,7 +127,7 @@ const Index = () => {
                 </li>
               </ul>
               <Button asChild>
-                <Link to="/register">Join TaskBridge Today</Link>
+                <Link to="/register">Join SkillEval Today</Link>
               </Button>
             </div>
             <div className="relative">
@@ -155,7 +163,7 @@ const Index = () => {
                 Ready to Transform Your Hiring Process?
               </h2>
               <p className="max-w-[700px] text-white/80 md:text-xl">
-                Join TaskBridge today and start connecting with the right talent or opportunities.
+                Join SkillEval today and start connecting with the right talent or opportunities.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">

@@ -17,7 +17,14 @@ const AboutPage = () => {
     <div className="container py-12">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">About TaskBridge</h1>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/lovable-uploads/2db31673-64e6-4622-9c8a-b02b71c7dbac.png" 
+              alt="SkillEval Logo" 
+              className="h-16 w-auto" 
+            />
+          </div>
+          <h1 className="text-4xl font-bold mb-4">About SkillEval</h1>
           <p className="text-xl text-muted-foreground">
             Revolutionizing recruitment through task-based skill verification
           </p>
@@ -27,7 +34,7 @@ const AboutPage = () => {
           <section className="space-y-6">
             <h2 className="text-3xl font-bold">Our Mission</h2>
             <p className="text-lg text-foreground/90">
-              TaskBridge was created to solve a fundamental problem in technical recruitment: the gap between claimed skills on resumes and actual abilities. We believe that the best way to evaluate talent is to see skills in action through relevant, real-world tasks.
+              SkillEval was created to solve a fundamental problem in technical recruitment: the gap between claimed skills on resumes and actual abilities. We believe that the best way to evaluate talent is to see skills in action through relevant, real-world tasks.
             </p>
             <p className="text-lg text-foreground/90">
               Our platform connects students and recent graduates with employers through a transparent, skill-based process that benefits both sides of the hiring equation.
@@ -35,7 +42,7 @@ const AboutPage = () => {
           </section>
           
           <section className="space-y-6">
-            <h2 className="text-3xl font-bold">How TaskBridge Works</h2>
+            <h2 className="text-3xl font-bold">How SkillEval Works</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="glass-panel p-6 rounded-lg">
                 <h3 className="text-xl font-bold flex items-center mb-4">
@@ -162,7 +169,7 @@ const AboutPage = () => {
             <div className="text-center max-w-2xl mx-auto">
               <h2 className="text-2xl font-bold mb-4">Ready to Transform Your Hiring or Job Search?</h2>
               <p className="text-lg text-muted-foreground mb-6">
-                Join TaskBridge today and experience the future of skill-based recruitment.
+                Join SkillEval today and experience the future of skill-based recruitment.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button asChild size="lg">
